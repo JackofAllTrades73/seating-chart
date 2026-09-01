@@ -531,19 +531,13 @@ function loadData() {
   docRef().get().then(snap => {
     if (snap.exists) {
       const data = snap.data();
-      const legacyStudents = data.students || [];
+      state.students = data.students || [];
       state.charts = data.charts || {};
-      // Migrate any chart that predates per-class rosters: give it its own
-      // copy of the old shared roster (same ids, so existing seats still line up).
-      Object.values(state.charts).forEach(c => {
-        if (!c.students) {
-          c.students = legacyStudents.map(s => ({ ...s }));
-        }
-      });
     } else {
       // first time: seed with one empty chart
       const id = uid();
-      state.charts = { [id]: { name: "Period 1", rows: 4, cols: 6, seats: {}, students: [] } };
+      state.students = [];
+      state.charts = { [id]: { name: "Period 1", rows: 4, cols: 6, seats: {} } };
     }
     const ids = Object.keys(state.charts);
     state.activeChartId = ids.length ? ids[0] : null;
@@ -563,6 +557,7 @@ function persist() {
   clearTimeout(state.saveTimer);
   state.saveTimer = setTimeout(() => {
     docRef().set({
+      students: state.students,
       charts: state.charts
     }, { merge: true }).then(() => {
       state.saveStatus = "Saved";
@@ -609,19 +604,18 @@ if (CONFIG_IS_SET) {
    ========================================================= */
 function addStudent(name) {
   name = name.trim();
-  if (!name || !state.activeChartId) return;
-  const chart = state.charts[state.activeChartId];
-  chart.students.push({ id: uid(), name });
+  if (!name) return;
+  state.students.push({ id: uid(), name });
   persist();
   render();
 }
 
 function removeStudent(id) {
-  const chart = state.charts[state.activeChartId];
-  if (!chart) return;
-  chart.students = chart.students.filter(s => s.id !== id);
-  Object.keys(chart.seats).forEach(k => {
-    if (chart.seats[k] === id) delete chart.seats[k];
+  state.students = state.students.filter(s => s.id !== id);
+  Object.values(state.charts).forEach(c => {
+    Object.keys(c.seats).forEach(k => {
+      if (c.seats[k] === id) delete c.seats[k];
+    });
   });
   persist();
   render();
@@ -716,21 +710,16 @@ function handleFileSelect(e) {
 }
 
 function doImport() {
-  const chart = state.charts[state.activeChartId];
-  if (!chart) {
-    alert("Create or select a class first.");
-    return;
-  }
   const names = parseNamesFromText(state.importText);
   if (names.length === 0) {
     alert("No names found. Paste a list of names or choose a CSV file first.");
     return;
   }
-  const existingLower = new Set(chart.students.map(s => s.name.toLowerCase()));
+  const existingLower = new Set(state.students.map(s => s.name.toLowerCase()));
   let added = 0, skipped = 0;
   names.forEach(name => {
     if (existingLower.has(name.toLowerCase())) { skipped++; return; }
-    chart.students.push({ id: uid(), name });
+    state.students.push({ id: uid(), name });
     existingLower.add(name.toLowerCase());
     added++;
   });
@@ -742,10 +731,8 @@ function doImport() {
 }
 
 function addChart() {
-  const name = prompt("Name this class (e.g. \"Period 3\" or \"Homeroom\"):", "New Class");
-  if (name === null) return;
   const id = uid();
-  state.charts[id] = { name: name.trim() || "New Class", rows: 4, cols: 6, seats: {}, students: [] };
+  state.charts[id] = { name: "New Chart", rows: 4, cols: 6, seats: {} };
   state.activeChartId = id;
   persist();
   render();
@@ -798,7 +785,7 @@ function clearSeat(chartId, seatKey) {
 function shuffleChart(chartId) {
   const c = state.charts[chartId];
   const placedIds = new Set(Object.values(c.seats));
-  const seated = c.students.filter(s => placedIds.has(s.id));
+  const seated = state.students.filter(s => placedIds.has(s.id));
   const pool = [...seated];
   for (let i = pool.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
@@ -960,23 +947,12 @@ function renderSidebar() {
   chartsSection.appendChild(el('button', {
     class: 'pill-btn secondary', style: 'margin-top:10px;width:100%;justify-content:center',
     onclick: addChart
-  }, [text('+ New class')]));
+  }, [text('+ New chart')]));
   side.appendChild(chartsSection);
 
-  // Roster section — scoped to the active chart/class
-  const activeChart = state.charts[state.activeChartId];
+  // Roster section
   const rosterSection = el('div', { class: 'section' });
-  rosterSection.appendChild(el('h3', {}, [
-    text(activeChart ? `Roster — ${activeChart.name}` : 'Roster')
-  ]));
-
-  if (!activeChart) {
-    rosterSection.appendChild(el('div', { class: 'empty-note' }, [
-      text('Create or select a class above to add students.')
-    ]));
-    side.appendChild(rosterSection);
-    return side;
-  }
+  rosterSection.appendChild(el('h3', {}, [text('Roster')]));
 
   const addRow = el('div', { class: 'roster-add' });
   const input = el('input', { placeholder: 'Student name', type: 'text' });
@@ -995,14 +971,15 @@ function renderSidebar() {
     onclick: openImportModal
   }, [text('Import list or CSV')]));
 
-  if (activeChart.students.length === 0) {
+  if (state.students.length === 0) {
     rosterSection.appendChild(el('div', { class: 'empty-note' }, [
-      text('Add students to this class above, then drag their names onto desks in the chart.')
+      text('Add your students above, then drag their names onto desks in the chart.')
     ]));
   } else {
-    const placedIds = new Set(Object.values(activeChart.seats));
+    const activeChart = state.charts[state.activeChartId];
+    const placedIds = activeChart ? new Set(Object.values(activeChart.seats)) : new Set();
     const rlist = el('div', { class: 'roster-list' });
-    activeChart.students.forEach(s => {
+    state.students.forEach(s => {
       const chip = el('div', {
         class: 'roster-chip' + (placedIds.has(s.id) ? ' placed' : ''),
         draggable: 'true',
@@ -1081,7 +1058,7 @@ function renderMain() {
   });
 
   const studentsById = {};
-  chart.students.forEach(s => studentsById[s.id] = s);
+  state.students.forEach(s => studentsById[s.id] = s);
 
   for (let r = 0; r < chart.rows; r++) {
     for (let c = 0; c < chart.cols; c++) {

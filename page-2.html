@@ -1,0 +1,1248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Redhawk Professionalism — Behavior Tracker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,500;0,600;1,500&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#F7F7F7;
+    --paper-line:#DDDDDD;
+    --ink:#141414;
+    --ink-soft:#3A3A3A;
+    --ledger:#111111;
+    --ledger-dark:#000000;
+    --folder:#C8102E;
+    --folder-light:#E14D63;
+    --check:#141414;
+    --check-bg:#E7E7E7;
+    --pen:#C8102E;
+    --pen-bg:#F7DCE1;
+    --rule:#B3B3B3;
+    --muted:#6E6E6E;
+    --white-ish:#FFFFFF;
+    --shadow: 0 2px 6px rgba(0,0,0,0.16);
+    --radius: 10px;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--paper);
+    color:var(--ink);
+    font-family:'IBM Plex Sans', sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  ::selection{ background:var(--folder-light); }
+  button{ font-family:inherit; cursor:pointer; }
+  input, select, textarea{ font-family:inherit; }
+  :focus-visible{ outline:2px solid var(--ledger); outline-offset:2px; }
+
+  /* ---------- Header ---------- */
+  .app-header{
+    background:var(--ledger);
+    color:var(--white-ish);
+    padding:18px 22px 16px;
+    display:flex;
+    align-items:baseline;
+    justify-content:space-between;
+    flex-wrap:wrap;
+    gap:8px;
+    border-bottom:4px solid var(--ledger-dark);
+  }
+  .app-title{
+    font-family:'Fraunces', serif;
+    font-style:italic;
+    font-weight:600;
+    font-size:26px;
+    letter-spacing:0.2px;
+  }
+  .app-title small{
+    display:block;
+    font-family:'IBM Plex Mono', monospace;
+    font-style:normal;
+    font-size:11px;
+    letter-spacing:1.5px;
+    text-transform:uppercase;
+    color:#B9C9BE;
+    margin-top:2px;
+  }
+  .app-date{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:13px;
+    color:#D8E3DA;
+  }
+  .sync-ok{ color:#8FD9A8; }
+  .sync-err{ color:#F0A6A6; }
+  .sync-muted{ color:#B9C9BE; }
+
+  /* ---------- Top-level view nav ---------- */
+  .view-nav{
+    display:flex;
+    gap:2px;
+    padding:0 22px;
+    background:var(--ledger-dark);
+  }
+  .view-nav button{
+    background:transparent;
+    border:none;
+    color:#AEC2B6;
+    padding:10px 16px;
+    font-size:13.5px;
+    font-weight:500;
+    border-bottom:3px solid transparent;
+  }
+  .view-nav button.active{
+    color:#fff;
+    border-bottom:3px solid var(--folder);
+  }
+  .view-nav button:hover:not(.active){ color:#fff; }
+
+  main{ max-width:1100px; margin:0 auto; padding:22px 22px 60px; }
+
+  /* ---------- Folder tabs (classes) ---------- */
+  .folder-tabs{
+    display:flex;
+    align-items:flex-end;
+    gap:4px;
+    flex-wrap:wrap;
+    margin-bottom:-1px;
+    position:relative;
+    z-index:1;
+  }
+  .folder-tab{
+    background:var(--folder);
+    color:var(--ink);
+    border:none;
+    padding:9px 18px 8px;
+    border-radius:8px 8px 0 0;
+    font-size:13.5px;
+    font-weight:600;
+    opacity:0.72;
+    transform:translateY(2px);
+    transition:transform .12s ease, opacity .12s ease;
+  }
+  .folder-tab.active{
+    background:var(--white-ish);
+    opacity:1;
+    transform:translateY(0);
+    box-shadow:var(--shadow);
+  }
+  .folder-tab:hover:not(.active){ opacity:0.9; }
+  .folder-tab.add-tab{
+    background:transparent;
+    color:var(--ledger);
+    border:1.5px dashed var(--rule);
+    opacity:1;
+    font-weight:500;
+  }
+
+  .ledger-panel{
+    background:var(--white-ish);
+    border:1px solid var(--paper-line);
+    border-radius:0 10px 10px 10px;
+    box-shadow:var(--shadow);
+    padding:20px;
+    position:relative;
+  }
+
+  .empty-state{
+    text-align:center;
+    padding:50px 20px;
+    color:var(--muted);
+  }
+  .empty-state h3{ font-family:'Fraunces', serif; font-style:italic; color:var(--ink); font-size:20px; margin-bottom:6px;}
+  .empty-state button{ margin-top:14px; }
+
+  .btn{
+    background:var(--ledger);
+    color:#fff;
+    border:none;
+    padding:9px 16px;
+    border-radius:7px;
+    font-size:13.5px;
+    font-weight:500;
+  }
+  .btn:hover{ background:var(--ledger-dark); }
+  .btn.secondary{
+    background:transparent;
+    color:var(--ledger);
+    border:1.5px solid var(--ledger);
+  }
+  .btn.secondary:hover{ background:#eef3f0; }
+  .btn.danger{ background:var(--pen); }
+  .btn.danger:hover{ background:#8a3125; }
+  .btn.small{ padding:5px 10px; font-size:12px; }
+
+  /* ---------- Track view toolbar ---------- */
+  .track-toolbar{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    flex-wrap:wrap;
+    gap:10px;
+    margin-bottom:16px;
+    padding-bottom:14px;
+    border-bottom:1px solid var(--paper-line);
+  }
+  .date-control{ display:flex; align-items:center; gap:6px; }
+  .date-control button{
+    background:none; border:1px solid var(--rule); color:var(--ledger);
+    width:28px; height:28px; border-radius:6px; font-size:14px;
+  }
+  .date-control input[type=date]{
+    border:1px solid var(--rule); border-radius:6px; padding:5px 8px;
+    font-family:'IBM Plex Mono', monospace; font-size:13px; color:var(--ink);
+    background:#fff;
+  }
+  .class-name-heading{
+    font-family:'Fraunces', serif; font-style:italic; font-size:19px;
+  }
+
+  /* ---------- Roster ledger table ---------- */
+  .roster-scroll{ overflow-x:auto; border-radius:8px; }
+  table.roster{
+    border-collapse:collapse;
+    width:100%;
+    min-width:640px;
+    background-image: repeating-linear-gradient(to bottom, transparent, transparent 43px, var(--paper-line) 43px, var(--paper-line) 44px);
+  }
+  table.roster th{
+    text-align:center;
+    font-size:10.5px;
+    font-weight:600;
+    text-transform:uppercase;
+    letter-spacing:0.4px;
+    color:var(--ink-soft);
+    padding:6px 8px 10px;
+    border-bottom:2px solid var(--ledger);
+    vertical-align:bottom;
+  }
+  table.roster th.name-col{ text-align:left; min-width:150px; }
+  table.roster th.pos{ color:var(--check); }
+  table.roster th.neg{ color:var(--pen); }
+  table.roster td{
+    padding:0 8px;
+    height:44px;
+    text-align:center;
+    border-bottom:1px solid transparent;
+  }
+  table.roster td.name-cell{
+    text-align:left;
+    font-weight:500;
+    white-space:nowrap;
+  }
+  .tally-cell{ position:relative; }
+  .tally-btn{
+    display:inline-flex;
+    align-items:center;
+    gap:5px;
+    background:transparent;
+    border:1px solid transparent;
+    border-radius:16px;
+    padding:4px 10px;
+    font-family:'IBM Plex Mono', monospace;
+    font-size:13px;
+    font-weight:600;
+    color:var(--muted);
+    min-width:34px;
+  }
+  .tally-btn.pos:hover, .tally-btn.pos.has-count{ background:var(--check-bg); color:var(--check); border-color:#c5dccb; }
+  .tally-btn.neg:hover, .tally-btn.neg.has-count{ background:var(--pen-bg); color:var(--pen); border-color:#e4c3ba; }
+  .tally-undo{
+    border:none; background:none; color:inherit; opacity:0.55;
+    font-size:11px; padding:0 0 0 2px; line-height:1;
+  }
+  .tally-undo:hover{ opacity:1; }
+  .note-btn{
+    background:none; border:1px solid var(--rule); border-radius:6px;
+    width:28px; height:28px; color:var(--ink-soft); font-size:13px; position:relative;
+  }
+  .note-btn.has-notes{ border-color:var(--ledger); color:var(--ledger); }
+  .note-btn .dot{
+    position:absolute; top:-3px; right:-3px; width:8px; height:8px;
+    border-radius:50%; background:var(--ledger);
+  }
+
+  /* ---------- Today's feed ---------- */
+  .feed{ margin-top:22px; }
+  .feed h4{ font-size:12px; text-transform:uppercase; letter-spacing:0.5px; color:var(--muted); margin-bottom:8px; }
+  .feed-item{
+    display:flex; align-items:center; gap:10px;
+    padding:7px 4px; font-size:13px; border-bottom:1px dashed var(--paper-line);
+  }
+  .feed-item time{ font-family:'IBM Plex Mono', monospace; font-size:11px; color:var(--muted); min-width:52px; }
+  .feed-item .tag{
+    font-size:10.5px; font-weight:600; padding:2px 7px; border-radius:10px;
+  }
+  .tag.pos{ background:var(--check-bg); color:var(--check); }
+  .tag.neg{ background:var(--pen-bg); color:var(--pen); }
+  .feed-item .fname{ font-weight:500; }
+  .feed-item .fnote{ color:var(--ink-soft); flex:1; }
+  .feed-item .remove{
+    background:none; border:none; color:var(--muted); font-size:15px; opacity:0.5;
+  }
+  .feed-item .remove:hover{ opacity:1; color:var(--pen); }
+  .feed-empty{ color:var(--muted); font-size:13px; padding:8px 4px; }
+
+  /* ---------- Reports ---------- */
+  .report-controls{
+    display:flex; align-items:flex-end; gap:14px; flex-wrap:wrap;
+    margin-bottom:18px; padding-bottom:16px; border-bottom:1px solid var(--paper-line);
+  }
+  .field{ display:flex; flex-direction:column; gap:4px; }
+  .field label{ font-size:11px; text-transform:uppercase; letter-spacing:0.4px; color:var(--muted); }
+  .field input, .field select{
+    border:1px solid var(--rule); border-radius:6px; padding:7px 9px; font-size:13px; background:#fff;
+  }
+  .preset-row{ display:flex; gap:6px; }
+  .preset-row button{
+    background:#fff; border:1px solid var(--rule); border-radius:6px; padding:6px 10px; font-size:12px; color:var(--ink-soft);
+  }
+  .preset-row button.active{ background:var(--ledger); color:#fff; border-color:var(--ledger); }
+
+  table.report{ width:100%; border-collapse:collapse; }
+  table.report th{
+    text-align:left; font-size:11px; text-transform:uppercase; letter-spacing:0.4px;
+    color:var(--muted); padding:8px 10px; border-bottom:2px solid var(--ledger);
+  }
+  table.report th.num, table.report td.num{ text-align:center; }
+  table.report td{ padding:10px; border-bottom:1px solid var(--paper-line); font-size:13.5px; vertical-align:top; }
+  table.report tr.student-row{ cursor:pointer; }
+  table.report tr.student-row:hover{ background:#F6F1E1; }
+  .count-pill{
+    display:inline-block; min-width:26px; font-family:'IBM Plex Mono', monospace; font-weight:600;
+    padding:2px 8px; border-radius:12px;
+  }
+  .count-pill.pos{ background:var(--check-bg); color:var(--check); }
+  .count-pill.neg{ background:var(--pen-bg); color:var(--pen); }
+  .net-badge{ font-family:'IBM Plex Mono', monospace; font-weight:600; }
+  .net-badge.up{ color:var(--check); }
+  .net-badge.down{ color:var(--pen); }
+  .detail-row td{ background:#F9F5E9; padding:14px 20px; }
+  .breakdown-grid{ display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:12px; }
+  .breakdown-col h5{ font-size:11px; text-transform:uppercase; color:var(--muted); margin:0 0 6px; }
+  .bar-row{ display:flex; align-items:center; gap:8px; font-size:12.5px; margin-bottom:4px; }
+  .bar-row .label{ min-width:120px; color:var(--ink-soft); }
+  .bar-track{ flex:1; height:8px; background:#EEE4CE; border-radius:4px; overflow:hidden; }
+  .bar-fill{ height:100%; border-radius:4px; }
+  .bar-fill.pos{ background:var(--check); }
+  .bar-fill.neg{ background:var(--pen); }
+  .bar-row .val{ font-family:'IBM Plex Mono', monospace; font-size:11.5px; color:var(--muted); min-width:16px; text-align:right;}
+  .note-list{ list-style:none; margin:0; padding:0; font-size:12.5px; }
+  .note-list li{ padding:5px 0; border-bottom:1px dashed var(--paper-line); }
+  .note-list time{ font-family:'IBM Plex Mono', monospace; color:var(--muted); margin-right:8px; }
+  .report-actions{ display:flex; gap:8px; margin-top:18px; }
+
+  /* ---------- Manage view ---------- */
+  .manage-grid{ display:grid; grid-template-columns:1fr 1fr; gap:20px; }
+  @media (max-width:760px){ .manage-grid{ grid-template-columns:1fr; } .breakdown-grid{ grid-template-columns:1fr; } }
+  .manage-section h3{ font-family:'Fraunces', serif; font-style:italic; font-size:18px; margin:0 0 12px; }
+  .class-card{
+    border:1px solid var(--paper-line); border-radius:8px; padding:12px 14px; margin-bottom:12px; background:#FCFAF3;
+  }
+  .class-card-head{ display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; }
+  .class-card-head strong{ font-size:14.5px; }
+  .student-chip-list{ display:flex; flex-wrap:wrap; gap:6px; margin-bottom:8px; }
+  .student-chip{
+    background:#fff; border:1px solid var(--rule); border-radius:14px; padding:4px 10px 4px 12px; font-size:12.5px;
+    display:flex; align-items:center; gap:6px;
+  }
+  .student-chip button{ background:none; border:none; color:var(--muted); font-size:13px; }
+  .student-chip button:hover{ color:var(--pen); }
+  .inline-form{ display:flex; gap:6px; flex-wrap:wrap; }
+  .inline-form input, .inline-form textarea{ border:1px solid var(--rule); border-radius:6px; padding:6px 9px; font-size:13px; flex:1; min-width:120px;}
+  .cat-row{
+    display:flex; align-items:center; gap:8px; padding:7px 0; border-bottom:1px dashed var(--paper-line);
+  }
+  .cat-row input[type=text]{ flex:1; border:1px solid var(--rule); border-radius:6px; padding:5px 8px; font-size:13px; }
+  .cat-type-toggle{ display:flex; border:1px solid var(--rule); border-radius:6px; overflow:hidden; }
+  .cat-type-toggle button{ border:none; padding:5px 9px; font-size:11px; background:#fff; color:var(--muted); }
+  .cat-type-toggle button.sel.pos{ background:var(--check); color:#fff; }
+  .cat-type-toggle button.sel.neg{ background:var(--pen); color:#fff; }
+  .danger-zone{ margin-top:26px; border-top:1px solid var(--paper-line); padding-top:16px; }
+  .danger-zone p{ font-size:12.5px; color:var(--muted); }
+
+  /* ---------- Modal ---------- */
+  .modal-backdrop{
+    position:fixed; inset:0; background:rgba(36,44,40,0.45); display:flex; align-items:center; justify-content:center;
+    padding:20px; z-index:50;
+  }
+  .modal{
+    background:#fff; border-radius:10px; padding:20px; width:100%; max-width:420px; box-shadow:0 12px 30px rgba(0,0,0,0.25);
+  }
+  .modal h3{ font-family:'Fraunces', serif; font-style:italic; margin:0 0 12px; font-size:18px; }
+  .modal textarea{ width:100%; border:1px solid var(--rule); border-radius:7px; padding:9px; font-size:13.5px; min-height:90px; resize:vertical; }
+  .modal-actions{ display:flex; justify-content:flex-end; gap:8px; margin-top:14px; }
+  .modal .field{ margin-bottom:10px; }
+  .modal select{ width:100%; }
+
+  .loading{ text-align:center; padding:80px 20px; color:var(--muted); font-family:'IBM Plex Mono', monospace; font-size:13px;}
+
+  @media print{
+    .app-header, .view-nav, .folder-tabs, .track-toolbar, .report-controls, .report-actions { display:none !important; }
+    body{ background:#fff; }
+    .ledger-panel{ box-shadow:none; border:none; }
+  }
+</style>
+</head>
+<body>
+
+<div class="app-header">
+  <div class="app-title">Redhawk Professionalism<small>Student Behavior Tracker</small></div>
+  <div style="text-align:right;">
+    <div class="app-date" id="headerDate"></div>
+    <div class="app-date" id="syncIndicator" style="margin-top:2px; font-size:11px;"></div>
+  </div>
+</div>
+<div class="view-nav" id="viewNav">
+  <button data-view="track" class="active">Track</button>
+  <button data-view="reports">Reports</button>
+  <button data-view="manage">Manage</button>
+</div>
+
+<main id="mainArea">
+  <div class="loading">Opening the ledger…</div>
+</main>
+
+<script>
+/* ======================= STATE ======================= */
+let CONFIG = null;   // { classes:[{id,name,students:[{id,name}]}], categories:[{id,label,type}] }
+let LOGS = null;     // [{id, ts(ms), dateStr, classId, studentId, categoryId, type, note}]
+let VIEW = 'track';
+let currentClassId = null;
+let currentDate = todayStr();
+let reportFrom = firstOfMonth();
+let reportTo = todayStr();
+let reportClassId = 'all';
+let expandedStudent = null;
+let saving = false;
+
+function todayStr(){ return new Date().toISOString().slice(0,10); }
+function firstOfMonth(){ const d=new Date(); d.setDate(1); return d.toISOString().slice(0,10); }
+function uid(prefix){ return prefix + '_' + Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
+
+const defaultCategories = [
+  {id:uid('cat'), label:'On Task', type:'positive'},
+  {id:uid('cat'), label:'Great Participation', type:'positive'},
+  {id:uid('cat'), label:'Helped a Peer', type:'positive'},
+  {id:uid('cat'), label:'Kind / Respectful', type:'positive'},
+  {id:uid('cat'), label:'Off Task', type:'negative'},
+  {id:uid('cat'), label:'Disruptive', type:'negative'},
+  {id:uid('cat'), label:'Unprepared', type:'negative'},
+  {id:uid('cat'), label:'Disrespectful', type:'negative'},
+];
+
+/* ======================= STORAGE ======================= */
+const LS_CONFIG_KEY = 'redhawk_behavior_config';
+const LS_LOGS_KEY = 'redhawk_behavior_logs';
+const LS_GITHUB_CFG_KEY = 'redhawk_github_cfg';
+const GITHUB_DATA_PATH_DEFAULT = 'behavior-data.json';
+
+let GITHUB_CFG = null;   // { owner, repo, path, token }
+let DATA_SHA = null;     // current sha of the data file on GitHub, for conflict-safe writes
+let syncStatus = 'idle'; // idle | local | saving | saved | error | conflict
+let saveTimer = null;
+
+function loadGithubCfg(){
+  try{ const raw = localStorage.getItem(LS_GITHUB_CFG_KEY); return raw ? JSON.parse(raw) : null; }
+  catch(e){ return null; }
+}
+function persistGithubCfg(cfg){
+  try{ localStorage.setItem(LS_GITHUB_CFG_KEY, JSON.stringify(cfg)); }catch(e){}
+}
+function clearGithubCfgStorage(){
+  try{ localStorage.removeItem(LS_GITHUB_CFG_KEY); }catch(e){}
+}
+
+/* ---- local cache (always mirrored, works even if GitHub is unreachable) ---- */
+function cacheLocally(){
+  try{
+    localStorage.setItem(LS_CONFIG_KEY, JSON.stringify(CONFIG));
+    localStorage.setItem(LS_LOGS_KEY, JSON.stringify(LOGS));
+  }catch(e){ console.error('local cache failed', e); }
+}
+function loadLocalCache(){
+  try{
+    const c = localStorage.getItem(LS_CONFIG_KEY);
+    const l = localStorage.getItem(LS_LOGS_KEY);
+    return { config: c?JSON.parse(c):null, logs: l?JSON.parse(l):null };
+  }catch(e){ return {config:null, logs:null}; }
+}
+
+/* ---- GitHub Contents API helpers ---- */
+function githubUrl(cfg){
+  return `https://api.github.com/repos/${encodeURIComponent(cfg.owner)}/${encodeURIComponent(cfg.repo)}/contents/${cfg.path.split('/').map(encodeURIComponent).join('/')}`;
+}
+function b64EncodeUtf8(str){ return btoa(unescape(encodeURIComponent(str))); }
+function b64DecodeUtf8(str){ return decodeURIComponent(escape(atob(str.replace(/\n/g,'')))); }
+
+async function githubGetFile(cfg){
+  const res = await fetch(githubUrl(cfg), {
+    headers:{ 'Authorization':`Bearer ${cfg.token}`, 'Accept':'application/vnd.github+json' }
+  });
+  if(res.status===404) return { notFound:true };
+  if(res.status===401 || res.status===403) throw Object.assign(new Error('GitHub authentication failed. Check the token and repo permissions.'), {status:res.status});
+  if(!res.ok) throw Object.assign(new Error('GitHub read failed: '+res.status), {status:res.status});
+  const json = await res.json();
+  const data = JSON.parse(b64DecodeUtf8(json.content));
+  return { sha: json.sha, data };
+}
+async function githubPutFile(cfg, dataObj, sha){
+  const body = {
+    message: `Update behavior data — ${new Date().toISOString()}`,
+    content: b64EncodeUtf8(JSON.stringify(dataObj, null, 2)),
+  };
+  if(sha) body.sha = sha;
+  const res = await fetch(githubUrl(cfg), {
+    method:'PUT',
+    headers:{ 'Authorization':`Bearer ${cfg.token}`, 'Accept':'application/vnd.github+json', 'Content-Type':'application/json' },
+    body: JSON.stringify(body)
+  });
+  if(!res.ok){
+    const err = await res.json().catch(()=>({}));
+    throw Object.assign(new Error(err.message || ('GitHub write failed: '+res.status)), {status:res.status});
+  }
+  const json = await res.json();
+  return json.content.sha;
+}
+
+/* ---- unified load ---- */
+async function loadAllData(){
+  GITHUB_CFG = loadGithubCfg();
+  if(GITHUB_CFG){
+    try{
+      const result = await githubGetFile(GITHUB_CFG);
+      if(result.notFound){
+        // First time — seed the file from whatever is cached locally, or defaults.
+        const cache = loadLocalCache();
+        CONFIG = cache.config || { classes:[], categories:defaultCategories };
+        LOGS = cache.logs || [];
+        DATA_SHA = await githubPutFile(GITHUB_CFG, {config:CONFIG, logs:LOGS}, null);
+        setSyncStatus('saved');
+      }else{
+        CONFIG = result.data.config;
+        LOGS = result.data.logs;
+        DATA_SHA = result.sha;
+        cacheLocally();
+        setSyncStatus('saved');
+      }
+      return;
+    }catch(e){
+      console.error('GitHub load failed, falling back to local cache', e);
+      setSyncStatus('error');
+      const cache = loadLocalCache();
+      if(cache.config){ CONFIG = cache.config; LOGS = cache.logs || []; }
+      else{ CONFIG = { classes:[], categories:defaultCategories }; LOGS = []; }
+      return;
+    }
+  }
+  // no GitHub connected — plain local mode
+  const cache = loadLocalCache();
+  if(cache.config){ CONFIG = cache.config; LOGS = cache.logs || []; }
+  else{ CONFIG = { classes:[], categories:defaultCategories }; LOGS = []; cacheLocally(); }
+  setSyncStatus('local');
+}
+
+/* ---- debounced save: caches instantly, pushes to GitHub after a short pause ---- */
+function scheduleSave(){
+  cacheLocally();
+  if(!GITHUB_CFG){ setSyncStatus('local'); return; }
+  setSyncStatus('pending');
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(pushToGithub, 1200);
+}
+
+async function pushToGithub(){
+  if(!GITHUB_CFG) return;
+  setSyncStatus('saving');
+  try{
+    DATA_SHA = await githubPutFile(GITHUB_CFG, {config:CONFIG, logs:LOGS}, DATA_SHA);
+    setSyncStatus('saved');
+  }catch(e){
+    if(e.status===409){
+      setSyncStatus('conflict');
+      try{
+        const fresh = await githubGetFile(GITHUB_CFG);
+        CONFIG = fresh.data.config; LOGS = fresh.data.logs; DATA_SHA = fresh.sha;
+        cacheLocally();
+        setSyncStatus('saved');
+        alert('Another device saved changes first, so the latest version was loaded from GitHub. If your last change is missing, please redo it.');
+        render();
+      }catch(e2){ setSyncStatus('error'); }
+    }else{
+      console.error(e);
+      setSyncStatus('error');
+    }
+  }
+}
+
+function setSyncStatus(status){
+  syncStatus = status;
+  const el = document.getElementById('syncIndicator');
+  if(!el) return;
+  const map = {
+    idle: {text:'', cls:''},
+    local: {text:'● Saved on this device only', cls:'muted'},
+    pending: {text:'○ Saving…', cls:'muted'},
+    saving: {text:'○ Saving to GitHub…', cls:'muted'},
+    saved: {text:'✓ Synced to GitHub', cls:'ok'},
+    error: {text:'⚠ Sync error — check connection', cls:'err'},
+    conflict: {text:'↻ Reloading latest…', cls:'muted'},
+  };
+  const m = map[status] || map.idle;
+  el.textContent = m.text;
+  el.className = 'app-date sync-'+m.cls;
+}
+
+/* ---- connect / disconnect flow (used from Manage view) ---- */
+async function connectGithub(){
+  const owner = document.getElementById('ghOwner').value.trim();
+  const repo = document.getElementById('ghRepo').value.trim();
+  const path = document.getElementById('ghPath').value.trim() || GITHUB_DATA_PATH_DEFAULT;
+  const token = document.getElementById('ghToken').value.trim();
+  if(!owner || !repo || !token){ alert('Please fill in the repo owner, repo name, and token.'); return; }
+  const cfg = {owner, repo, path, token};
+
+  const btn = document.getElementById('ghConnectBtn');
+  if(btn){ btn.disabled = true; btn.textContent = 'Connecting…'; }
+  try{
+    const result = await githubGetFile(cfg);
+    if(result.notFound){
+      GITHUB_CFG = cfg;
+      DATA_SHA = await githubPutFile(cfg, {config:CONFIG, logs:LOGS}, null);
+      persistGithubCfg(cfg);
+      setSyncStatus('saved');
+      alert('Connected. This device\'s current data has been saved to GitHub as the starting point.');
+    }else{
+      const useRemote = confirm('GitHub already has saved data at this path.\n\nClick OK to load that data onto this device (recommended if another device already set this up).\nClick Cancel to keep this device\'s current data and overwrite what\'s on GitHub.');
+      GITHUB_CFG = cfg;
+      if(useRemote){
+        CONFIG = result.data.config;
+        LOGS = result.data.logs;
+        DATA_SHA = result.sha;
+      }else{
+        DATA_SHA = await githubPutFile(cfg, {config:CONFIG, logs:LOGS}, result.sha);
+      }
+      persistGithubCfg(cfg);
+      cacheLocally();
+      setSyncStatus('saved');
+      alert('Connected successfully.');
+    }
+    currentClassId = CONFIG.classes[0]?.id || null;
+    render();
+  }catch(e){
+    console.error(e);
+    alert('Could not connect: ' + e.message);
+  }finally{
+    if(btn){ btn.disabled = false; btn.textContent = 'Connect'; }
+  }
+}
+function disconnectGithub(){
+  if(!confirm('Stop syncing to GitHub? Your data will remain on this device only from now on.')) return;
+  clearGithubCfgStorage();
+  GITHUB_CFG = null;
+  DATA_SHA = null;
+  setSyncStatus('local');
+  render();
+}
+async function manualSync(){
+  if(!GITHUB_CFG) return;
+  setSyncStatus('saving');
+  try{
+    const fresh = await githubGetFile(GITHUB_CFG);
+    if(!fresh.notFound && fresh.sha !== DATA_SHA){
+      const useRemote = confirm('Newer data was found on GitHub. Load it onto this device? (Cancel keeps this device\'s current view and pushes it instead.)');
+      if(useRemote){
+        CONFIG = fresh.data.config; LOGS = fresh.data.logs; DATA_SHA = fresh.sha;
+        cacheLocally();
+        setSyncStatus('saved');
+        render();
+        return;
+      }
+    }
+    DATA_SHA = await githubPutFile(GITHUB_CFG, {config:CONFIG, logs:LOGS}, fresh.notFound ? null : fresh.sha);
+    setSyncStatus('saved');
+  }catch(e){
+    console.error(e);
+    setSyncStatus('error');
+    alert('Sync failed: ' + e.message);
+  }
+}
+
+/* ------- Backup / Restore (JSON file) ------- */
+function exportBackup(){
+  const payload = { exportedAt: new Date().toISOString(), config: CONFIG, logs: LOGS };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `redhawk-behavior-backup_${todayStr()}.json`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+function triggerImportBackup(){
+  document.getElementById('importBackupInput').click();
+}
+async function handleImportBackup(input){
+  const file = input.files[0];
+  if(!file) return;
+  try{
+    const text = await file.text();
+    const payload = JSON.parse(text);
+    if(!payload.config || !payload.logs) throw new Error('bad format');
+    if(!confirm('This will replace all current data with the backup file (and push it to GitHub if connected). Continue?')) { input.value=''; return; }
+    CONFIG = payload.config;
+    LOGS = payload.logs;
+    scheduleSave();
+    currentClassId = CONFIG.classes[0]?.id || null;
+    alert('Backup restored successfully.');
+    render();
+  }catch(e){
+    console.error(e);
+    alert('Could not read that file. Make sure it is a backup exported from this tracker.');
+  }
+  input.value='';
+}
+
+/* ======================= INIT ======================= */
+async function init(){
+  document.getElementById('headerDate').textContent = new Date().toLocaleDateString(undefined,{weekday:'long', month:'short', day:'numeric', year:'numeric'});
+
+  await loadAllData();
+
+  if(CONFIG.classes.length){ currentClassId = CONFIG.classes[0].id; }
+
+  document.getElementById('viewNav').addEventListener('click', e=>{
+    const btn = e.target.closest('button[data-view]');
+    if(!btn) return;
+    VIEW = btn.dataset.view;
+    render();
+  });
+
+  render();
+}
+
+/* ======================= RENDER ROOT ======================= */
+function render(){
+  document.querySelectorAll('#viewNav button').forEach(b=> b.classList.toggle('active', b.dataset.view===VIEW));
+  const main = document.getElementById('mainArea');
+  if(VIEW==='track') main.innerHTML = renderTrack();
+  else if(VIEW==='reports') main.innerHTML = renderReports();
+  else main.innerHTML = renderManage();
+  bindDynamicHandlers();
+}
+
+/* ======================= TRACK VIEW ======================= */
+function renderTrack(){
+  if(!CONFIG.classes.length){
+    return `<div class="ledger-panel"><div class="empty-state">
+      <h3>No classes yet</h3>
+      <p>Add a class and roster in Manage to start tracking behavior.</p>
+      <button class="btn" onclick="goManage()">Set Up a Class</button>
+    </div></div>`;
+  }
+  if(!currentClassId || !CONFIG.classes.find(c=>c.id===currentClassId)){
+    currentClassId = CONFIG.classes[0].id;
+  }
+  const cls = CONFIG.classes.find(c=>c.id===currentClassId);
+  const posCats = CONFIG.categories.filter(c=>c.type==='positive');
+  const negCats = CONFIG.categories.filter(c=>c.type==='negative');
+
+  const tabs = CONFIG.classes.map(c=>
+    `<button class="folder-tab ${c.id===currentClassId?'active':''}" onclick="selectClass('${c.id}')">${escapeHtml(c.name)}</button>`
+  ).join('') + `<button class="folder-tab add-tab" onclick="goManage()">+ Class</button>`;
+
+  let rosterHtml;
+  if(!cls.students.length){
+    rosterHtml = `<div class="empty-state"><h3>No students in ${escapeHtml(cls.name)}</h3>
+      <p>Add students to this class in Manage.</p>
+      <button class="btn" onclick="goManage()">Add Students</button></div>`;
+  }else{
+    const headCells = `<th class="name-col">Student</th>` +
+      posCats.map(c=>`<th class="pos">${escapeHtml(c.label)}</th>`).join('') +
+      negCats.map(c=>`<th class="neg">${escapeHtml(c.label)}</th>`).join('') +
+      `<th>Note</th>`;
+
+    const rows = cls.students.map(s=>{
+      const noteCount = LOGS.filter(l=>l.studentId===s.id && l.dateStr===currentDate && l.note).length;
+      const cells = posCats.map(c=>tallyCell(s.id,c.id,'positive')).join('') +
+                    negCats.map(c=>tallyCell(s.id,c.id,'negative')).join('') +
+                    `<td><button class="note-btn ${noteCount?'has-notes':''}" onclick="openNoteModal('${s.id}')" title="Add note">✎${noteCount?'<span class=\"dot\"></span>':''}</button></td>`;
+      return `<tr><td class="name-cell">${escapeHtml(s.name)}</td>${cells}</tr>`;
+    }).join('');
+
+    rosterHtml = `<div class="roster-scroll"><table class="roster">
+      <thead><tr>${headCells}</tr></thead>
+      <tbody>${rows}</tbody>
+    </table></div>`;
+  }
+
+  const feedEntries = LOGS.filter(l=>l.classId===currentClassId && l.dateStr===currentDate)
+    .sort((a,b)=>b.ts-a.ts);
+  const feedHtml = feedEntries.length ? feedEntries.map(l=>{
+    const s = cls.students.find(st=>st.id===l.studentId);
+    const cat = CONFIG.categories.find(c=>c.id===l.categoryId);
+    const time = new Date(l.ts).toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit'});
+    return `<div class="feed-item">
+      <time>${time}</time>
+      ${cat ? `<span class="tag ${l.type}">${escapeHtml(cat.label)}</span>` : `<span class="tag ${l.type}">note</span>`}
+      <span class="fname">${escapeHtml(s? s.name : 'Unknown')}</span>
+      <span class="fnote">${escapeHtml(l.note||'')}</span>
+      <button class="remove" title="Remove entry" onclick="removeLog('${l.id}')">✕</button>
+    </div>`;
+  }).join('') : `<div class="feed-empty">No entries logged yet for this day.</div>`;
+
+  return `
+    <div class="folder-tabs">${tabs}</div>
+    <div class="ledger-panel">
+      <div class="track-toolbar">
+        <div class="class-name-heading">${escapeHtml(cls.name)}</div>
+        <div class="date-control">
+          <button onclick="shiftDate(-1)" title="Previous day">‹</button>
+          <input type="date" value="${currentDate}" onchange="setDate(this.value)">
+          <button onclick="shiftDate(1)" title="Next day">›</button>
+          ${currentDate!==todayStr() ? `<button class="btn small secondary" onclick="setDate(todayStr())">Today</button>` : ''}
+        </div>
+      </div>
+      ${rosterHtml}
+      <div class="feed">
+        <h4>Today's Activity — ${formatDate(currentDate)}</h4>
+        ${feedHtml}
+      </div>
+    </div>
+  `;
+}
+
+function tallyCell(studentId, catId, type){
+  const count = LOGS.filter(l=>l.studentId===studentId && l.categoryId===catId && l.dateStr===currentDate).length;
+  return `<td class="tally-cell">
+    <button class="tally-btn ${type==='positive'?'pos':'neg'} ${count>0?'has-count':''}" onclick="addTally('${studentId}','${catId}','${type}')">
+      ${count>0?count:'+'}
+    </button>
+    ${count>0?`<button class="tally-undo" title="Undo last" onclick="undoTally('${studentId}','${catId}')">↺</button>`:''}
+  </td>`;
+}
+
+function selectClass(id){ currentClassId=id; render(); }
+function shiftDate(delta){
+  const d = new Date(currentDate+'T00:00:00');
+  d.setDate(d.getDate()+delta);
+  currentDate = d.toISOString().slice(0,10);
+  render();
+}
+function setDate(v){ currentDate = v; render(); }
+function goManage(){ VIEW='manage'; render(); }
+
+async function addTally(studentId, categoryId, type){
+  const entry = { id:uid('log'), ts:Date.now(), dateStr:currentDate, classId:currentClassId, studentId, categoryId, type, note:'' };
+  LOGS.push(entry);
+  render();
+  scheduleSave();
+}
+async function undoTally(studentId, categoryId){
+  const idxs = LOGS.map((l,i)=> (l.studentId===studentId && l.categoryId===categoryId && l.dateStr===currentDate) ? i : -1).filter(i=>i>=0);
+  if(!idxs.length) return;
+  LOGS.splice(idxs[idxs.length-1],1);
+  render();
+  scheduleSave();
+}
+async function removeLog(id){
+  LOGS = LOGS.filter(l=>l.id!==id);
+  render();
+  scheduleSave();
+}
+
+/* ------- Note modal ------- */
+function openNoteModal(studentId){
+  const cls = CONFIG.classes.find(c=>c.id===currentClassId);
+  const s = cls.students.find(st=>st.id===studentId);
+  const cats = CONFIG.categories;
+  const modalHtml = `
+  <div class="modal-backdrop" id="noteBackdrop">
+    <div class="modal">
+      <h3>Note for ${escapeHtml(s.name)}</h3>
+      <div class="field">
+        <label>Behavior category (optional)</label>
+        <select id="noteCategory">
+          <option value="">— General note —</option>
+          ${cats.map(c=>`<option value="${c.id}">${c.type==='positive'?'✓':'−'} ${escapeHtml(c.label)}</option>`).join('')}
+        </select>
+      </div>
+      <div class="field">
+        <label>Details</label>
+        <textarea id="noteText" placeholder="What happened? Be specific and factual."></textarea>
+      </div>
+      <div class="modal-actions">
+        <button class="btn secondary" onclick="closeModal()">Cancel</button>
+        <button class="btn" onclick="saveNote('${studentId}')">Save Note</button>
+      </div>
+    </div>
+  </div>`;
+  document.body.insertAdjacentHTML('beforeend', modalHtml);
+  document.getElementById('noteText').focus();
+}
+function closeModal(){
+  const el = document.getElementById('noteBackdrop');
+  if(el) el.remove();
+}
+async function saveNote(studentId){
+  const text = document.getElementById('noteText').value.trim();
+  const catId = document.getElementById('noteCategory').value;
+  if(!text){ alert('Please add some detail before saving.'); return; }
+  const cat = CONFIG.categories.find(c=>c.id===catId);
+  const entry = { id:uid('log'), ts:Date.now(), dateStr:currentDate, classId:currentClassId, studentId,
+    categoryId: catId||null, type: cat? cat.type : 'note', note:text };
+  LOGS.push(entry);
+  closeModal();
+  render();
+  scheduleSave();
+}
+
+/* ======================= REPORTS VIEW ======================= */
+function renderReports(){
+  if(!CONFIG.classes.length){
+    return `<div class="ledger-panel"><div class="empty-state"><h3>Nothing to report yet</h3><p>Add a class and start logging to generate reports.</p></div></div>`;
+  }
+  const classOptions = `<option value="all">All Classes</option>` +
+    CONFIG.classes.map(c=>`<option value="${c.id}" ${reportClassId===c.id?'selected':''}>${escapeHtml(c.name)}</option>`).join('');
+
+  const inRange = LOGS.filter(l=> l.dateStr>=reportFrom && l.dateStr<=reportTo && (reportClassId==='all' || l.classId===reportClassId));
+
+  // gather students in scope
+  let studentsInScope = [];
+  const classesInScope = reportClassId==='all' ? CONFIG.classes : CONFIG.classes.filter(c=>c.id===reportClassId);
+  classesInScope.forEach(c=> c.students.forEach(s=> studentsInScope.push({...s, className:c.name})));
+
+  const posCats = CONFIG.categories.filter(c=>c.type==='positive');
+  const negCats = CONFIG.categories.filter(c=>c.type==='negative');
+
+  const rows = studentsInScope.map(s=>{
+    const sLogs = inRange.filter(l=>l.studentId===s.id);
+    const posTotal = sLogs.filter(l=>l.type==='positive').length;
+    const negTotal = sLogs.filter(l=>l.type==='negative').length;
+    const net = posTotal - negTotal;
+    const noteEntries = sLogs.filter(l=>l.note);
+    const expanded = expandedStudent===s.id;
+
+    let detailRow = '';
+    if(expanded){
+      const posBars = posCats.map(c=>{
+        const n = sLogs.filter(l=>l.categoryId===c.id).length;
+        const max = Math.max(1, ...posCats.map(cc=>sLogs.filter(l=>l.categoryId===cc.id).length));
+        return `<div class="bar-row"><span class="label">${escapeHtml(c.label)}</span><div class="bar-track"><div class="bar-fill pos" style="width:${(n/max)*100}%"></div></div><span class="val">${n}</span></div>`;
+      }).join('');
+      const negBars = negCats.map(c=>{
+        const n = sLogs.filter(l=>l.categoryId===c.id).length;
+        const max = Math.max(1, ...negCats.map(cc=>sLogs.filter(l=>l.categoryId===cc.id).length));
+        return `<div class="bar-row"><span class="label">${escapeHtml(c.label)}</span><div class="bar-track"><div class="bar-fill neg" style="width:${(n/max)*100}%"></div></div><span class="val">${n}</span></div>`;
+      }).join('');
+      const notesHtml = noteEntries.length ? `<ul class="note-list">${noteEntries.sort((a,b)=>a.ts-b.ts).map(n=>{
+          const cat = CONFIG.categories.find(c=>c.id===n.categoryId);
+          return `<li><time>${formatDate(n.dateStr)}</time>${cat?`<strong>${escapeHtml(cat.label)}:</strong> `:''}${escapeHtml(n.note)}</li>`;
+        }).join('')}</ul>` : `<p style="color:var(--muted); font-size:12.5px;">No written notes in this range.</p>`;
+
+      detailRow = `<tr class="detail-row"><td colspan="6">
+        <div class="breakdown-grid">
+          <div class="breakdown-col"><h5>Positive Breakdown</h5>${posBars || '<p style="color:var(--muted);font-size:12px;">No categories set.</p>'}</div>
+          <div class="breakdown-col"><h5>Negative Breakdown</h5>${negBars || '<p style="color:var(--muted);font-size:12px;">No categories set.</p>'}</div>
+        </div>
+        <h5 style="font-size:11px;text-transform:uppercase;color:var(--muted);margin:10px 0 6px;">Notes</h5>
+        ${notesHtml}
+      </td></tr>`;
+    }
+
+    return `<tr class="student-row" onclick="toggleStudent('${s.id}')">
+        <td>${escapeHtml(s.name)}${reportClassId==='all'?`<div style="font-size:11px;color:var(--muted);">${escapeHtml(s.className)}</div>`:''}</td>
+        <td class="num"><span class="count-pill pos">${posTotal}</span></td>
+        <td class="num"><span class="count-pill neg">${negTotal}</span></td>
+        <td class="num"><span class="net-badge ${net>=0?'up':'down'}">${net>0?'+':''}${net}</span></td>
+        <td class="num">${noteEntries.length}</td>
+        <td class="num" style="color:var(--muted); font-size:12px;">${expanded?'▲':'▼'}</td>
+      </tr>${detailRow}`;
+  }).sort().join('');
+
+  return `
+    <div class="ledger-panel">
+      <div class="report-controls">
+        <div class="field">
+          <label>Class</label>
+          <select onchange="setReportClass(this.value)">${classOptions}</select>
+        </div>
+        <div class="field">
+          <label>From</label>
+          <input type="date" value="${reportFrom}" onchange="setReportFrom(this.value)">
+        </div>
+        <div class="field">
+          <label>To</label>
+          <input type="date" value="${reportTo}" onchange="setReportTo(this.value)">
+        </div>
+        <div class="preset-row">
+          <button onclick="applyPreset('week')">This Week</button>
+          <button onclick="applyPreset('month')">This Month</button>
+          <button onclick="applyPreset('year')">School Year</button>
+        </div>
+      </div>
+      <table class="report">
+        <thead><tr>
+          <th>Student</th><th class="num">Positive</th><th class="num">Negative</th><th class="num">Net</th><th class="num">Notes</th><th></th>
+        </tr></thead>
+        <tbody>${rows || `<tr><td colspan="6" style="color:var(--muted);">No students in scope.</td></tr>`}</tbody>
+      </table>
+      <div class="report-actions">
+        <button class="btn secondary" onclick="exportCsv()">Export CSV</button>
+        <button class="btn secondary" onclick="window.print()">Print Report</button>
+      </div>
+    </div>
+  `;
+}
+
+function toggleStudent(id){ expandedStudent = expandedStudent===id ? null : id; render(); }
+function setReportClass(v){ reportClassId=v; render(); }
+function setReportFrom(v){ reportFrom=v; render(); }
+function setReportTo(v){ reportTo=v; render(); }
+function applyPreset(kind){
+  const now = new Date();
+  if(kind==='week'){
+    const d = new Date(now);
+    const day = d.getDay();
+    const diff = (day===0? -6 : 1) - day;
+    d.setDate(d.getDate()+diff);
+    reportFrom = d.toISOString().slice(0,10);
+    reportTo = todayStr();
+  }else if(kind==='month'){
+    reportFrom = firstOfMonth();
+    reportTo = todayStr();
+  }else if(kind==='year'){
+    const y = now.getMonth()>=6 ? now.getFullYear() : now.getFullYear()-1; // school year starting ~July
+    reportFrom = `${y}-08-01`;
+    reportTo = todayStr();
+  }
+  render();
+}
+
+function exportCsv(){
+  const classesInScope = reportClassId==='all' ? CONFIG.classes : CONFIG.classes.filter(c=>c.id===reportClassId);
+  let studentsInScope = [];
+  classesInScope.forEach(c=> c.students.forEach(s=> studentsInScope.push({...s, className:c.name})));
+  const inRange = LOGS.filter(l=> l.dateStr>=reportFrom && l.dateStr<=reportTo && (reportClassId==='all' || l.classId===reportClassId));
+
+  const header = ['Student','Class','Positive Total','Negative Total','Net','Notes Count','Notes'];
+  const lines = [header.join(',')];
+  studentsInScope.forEach(s=>{
+    const sLogs = inRange.filter(l=>l.studentId===s.id);
+    const posTotal = sLogs.filter(l=>l.type==='positive').length;
+    const negTotal = sLogs.filter(l=>l.type==='negative').length;
+    const notes = sLogs.filter(l=>l.note).map(n=>`${n.dateStr}: ${n.note}`).join(' | ');
+    const row = [s.name, s.className, posTotal, negTotal, posTotal-negTotal, sLogs.filter(l=>l.note).length, notes]
+      .map(v=> `"${String(v).replace(/"/g,'""')}"`);
+    lines.push(row.join(','));
+  });
+  const blob = new Blob([lines.join('\n')], {type:'text/csv'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `behavior-report_${reportFrom}_to_${reportTo}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+/* ======================= MANAGE VIEW ======================= */
+function renderManage(){
+  const classCards = CONFIG.classes.map(c=>`
+    <div class="class-card">
+      <div class="class-card-head">
+        <strong>${escapeHtml(c.name)}</strong>
+        <button class="btn small danger" onclick="deleteClass('${c.id}')">Delete Class</button>
+      </div>
+      <div class="student-chip-list">
+        ${c.students.map(s=>`<span class="student-chip">${escapeHtml(s.name)}<button onclick="deleteStudent('${c.id}','${s.id}')" title="Remove">✕</button></span>`).join('') || '<span style="color:var(--muted); font-size:12.5px;">No students yet.</span>'}
+      </div>
+      <div class="inline-form">
+        <input type="text" id="addStudent_${c.id}" placeholder="Add student name…">
+        <button class="btn small" onclick="addStudent('${c.id}')">Add</button>
+      </div>
+      <details style="margin-top:8px;">
+        <summary style="font-size:12px; color:var(--muted); cursor:pointer;">Paste a roster (one name per line)</summary>
+        <div class="inline-form" style="margin-top:6px;">
+          <textarea id="bulkStudent_${c.id}" placeholder="Jane Doe&#10;John Smith" style="min-height:70px;"></textarea>
+        </div>
+        <button class="btn small secondary" style="margin-top:6px;" onclick="bulkAddStudents('${c.id}')">Add All</button>
+      </details>
+    </div>
+  `).join('');
+
+  const catRows = CONFIG.categories.map(c=>`
+    <div class="cat-row">
+      <div class="cat-type-toggle">
+        <button class="${c.type==='positive'?'sel pos':''}" onclick="setCatType('${c.id}','positive')">+</button>
+        <button class="${c.type==='negative'?'sel neg':''}" onclick="setCatType('${c.id}','negative')">−</button>
+      </div>
+      <input type="text" value="${escapeHtml(c.label)}" onchange="renameCat('${c.id}', this.value)">
+      <button class="btn small danger" onclick="deleteCat('${c.id}')">✕</button>
+    </div>
+  `).join('');
+
+  return `
+    <div class="ledger-panel">
+      <div class="manage-grid">
+        <div class="manage-section">
+          <h3>Classes & Rosters</h3>
+          ${classCards}
+          <div class="inline-form">
+            <input type="text" id="newClassName" placeholder="New class name (e.g. Period 3 — Algebra)">
+            <button class="btn" onclick="addClass()">Add Class</button>
+          </div>
+        </div>
+        <div class="manage-section">
+          <h3>Behavior Categories</h3>
+          ${catRows}
+          <div class="inline-form" style="margin-top:10px;">
+            <input type="text" id="newCatLabel" placeholder="New category label">
+            <button class="btn" onclick="addCat()">Add</button>
+          </div>
+        </div>
+      </div>
+      <div class="danger-zone">
+        <h3 style="font-family:'Fraunces',serif; font-style:italic; font-size:16px;">GitHub Sync</h3>
+        ${GITHUB_CFG ? `
+          <p>Connected to <strong>${escapeHtml(GITHUB_CFG.owner)}/${escapeHtml(GITHUB_CFG.repo)}</strong> — file: <code>${escapeHtml(GITHUB_CFG.path)}</code>. Your data syncs across any device where you connect with the same repo and token.</p>
+          <div style="display:flex; gap:8px; flex-wrap:wrap;">
+            <button class="btn secondary" onclick="manualSync()">Sync Now</button>
+            <button class="btn danger" onclick="disconnectGithub()">Disconnect</button>
+          </div>
+        ` : `
+          <p>Connect a private GitHub repo to sync data across every device you use — no more being tied to one computer. Requires a <strong>private</strong> repository and a fine-grained personal access token scoped to just that repo with <strong>Contents: Read and write</strong> permission. Do not use a broad, all-repo token.</p>
+          <div class="inline-form" style="margin-bottom:8px;">
+            <input type="text" id="ghOwner" placeholder="GitHub username or org">
+            <input type="text" id="ghRepo" placeholder="Repository name (private)">
+          </div>
+          <div class="inline-form" style="margin-bottom:8px;">
+            <input type="text" id="ghPath" placeholder="File path (default: behavior-data.json)">
+          </div>
+          <div class="inline-form" style="margin-bottom:8px;">
+            <input type="password" id="ghToken" placeholder="Fine-grained personal access token">
+          </div>
+          <button class="btn" id="ghConnectBtn" onclick="connectGithub()">Connect</button>
+          <p style="margin-top:10px; font-size:11.5px;">The token is stored only in this browser's local storage, never committed to the repo. Re-enter it on each device you use. Treat it like a password — anyone with device access and dev tools could read it.</p>
+        `}
+      </div>
+      <div class="danger-zone">
+        <h3 style="font-family:'Fraunces',serif; font-style:italic; font-size:16px;">Backup</h3>
+        <p>Export a backup regularly — especially at the end of a marking period — as an extra copy independent of GitHub or browser storage.</p>
+        <input type="file" id="importBackupInput" accept="application/json" style="display:none;" onchange="handleImportBackup(this)">
+        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+          <button class="btn secondary" onclick="exportBackup()">Export Backup</button>
+          <button class="btn secondary" onclick="triggerImportBackup()">Import Backup</button>
+        </div>
+      </div>
+      <div class="danger-zone">
+        <h3 style="font-family:'Fraunces',serif; font-style:italic; font-size:16px;">Danger Zone</h3>
+        <p>This clears all classes, students, categories, and logged history from this browser's saved data. This cannot be undone. Export a backup first if you might need this data again.</p>
+        <button class="btn danger" onclick="resetAll()">Erase All Data</button>
+      </div>
+    </div>
+  `;
+}
+
+async function addClass(){
+  const input = document.getElementById('newClassName');
+  const name = input.value.trim();
+  if(!name) return;
+  CONFIG.classes.push({id:uid('cls'), name, students:[]});
+  if(!currentClassId) currentClassId = CONFIG.classes[0].id;
+  render();
+  scheduleSave();
+}
+async function deleteClass(id){
+  if(!confirm('Delete this class and its roster? Logged history for these students will remain in reports but the roster will be removed.')) return;
+  CONFIG.classes = CONFIG.classes.filter(c=>c.id!==id);
+  if(currentClassId===id) currentClassId = CONFIG.classes[0]?.id || null;
+  render();
+  scheduleSave();
+}
+async function addStudent(classId){
+  const input = document.getElementById('addStudent_'+classId);
+  const name = input.value.trim();
+  if(!name) return;
+  const cls = CONFIG.classes.find(c=>c.id===classId);
+  cls.students.push({id:uid('stu'), name});
+  render();
+  scheduleSave();
+}
+async function bulkAddStudents(classId){
+  const ta = document.getElementById('bulkStudent_'+classId);
+  const names = ta.value.split('\n').map(n=>n.trim()).filter(Boolean);
+  if(!names.length) return;
+  const cls = CONFIG.classes.find(c=>c.id===classId);
+  names.forEach(name=> cls.students.push({id:uid('stu'), name}));
+  render();
+  scheduleSave();
+}
+async function deleteStudent(classId, studentId){
+  const cls = CONFIG.classes.find(c=>c.id===classId);
+  cls.students = cls.students.filter(s=>s.id!==studentId);
+  render();
+  scheduleSave();
+}
+async function addCat(){
+  const input = document.getElementById('newCatLabel');
+  const label = input.value.trim();
+  if(!label) return;
+  CONFIG.categories.push({id:uid('cat'), label, type:'positive'});
+  render();
+  scheduleSave();
+}
+async function renameCat(id, value){
+  const cat = CONFIG.categories.find(c=>c.id===id);
+  cat.label = value.trim() || cat.label;
+  scheduleSave();
+}
+async function setCatType(id, type){
+  const cat = CONFIG.categories.find(c=>c.id===id);
+  cat.type = type;
+  render();
+  scheduleSave();
+}
+async function deleteCat(id){
+  if(!confirm('Delete this category? Past logged entries will keep their data but will no longer show a label.')) return;
+  CONFIG.categories = CONFIG.categories.filter(c=>c.id!==id);
+  render();
+  scheduleSave();
+}
+async function resetAll(){
+  if(!confirm('This will permanently erase all classes, students, categories, and logs. Continue?')) return;
+  if(!confirm('Are you absolutely sure? This cannot be undone.')) return;
+  CONFIG = { classes:[], categories:defaultCategories };
+  LOGS = [];
+  currentClassId = null;
+  scheduleSave();
+  scheduleSave();
+  VIEW='manage';
+  render();
+}
+
+/* ======================= HELPERS ======================= */
+function escapeHtml(str){
+  return String(str).replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+}
+function formatDate(d){
+  const dt = new Date(d+'T00:00:00');
+  return dt.toLocaleDateString(undefined,{month:'short', day:'numeric', year:'numeric'});
+}
+function bindDynamicHandlers(){
+  const bd = document.getElementById('noteBackdrop');
+  if(bd){
+    bd.addEventListener('click', e=>{ if(e.target===bd) closeModal(); });
+  }
+}
+
+init();
+</script>
+</body>
+</html>

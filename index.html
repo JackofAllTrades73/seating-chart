@@ -406,6 +406,70 @@
     .sidebar { width: 220px; }
     .desk { width: 96px; height: 68px; font-size: 12px; }
   }
+
+  /* ---------- Import modal ---------- */
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(36, 48, 43, 0.45);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+    padding: 20px;
+  }
+  .modal-box {
+    background: var(--white);
+    border-radius: var(--radius);
+    padding: 28px;
+    width: 480px;
+    max-width: 100%;
+    max-height: 85vh;
+    overflow-y: auto;
+  }
+  .modal-box h3 {
+    margin: 0 0 6px 0;
+    font-size: 19px;
+    color: var(--green-deep);
+  }
+  .modal-box .hint {
+    font-size: 13px;
+    color: var(--ink-soft);
+    line-height: 1.55;
+    margin-bottom: 16px;
+  }
+  .modal-box .file-row {
+    margin-bottom: 14px;
+    font-size: 13.5px;
+  }
+  .modal-box .file-row input[type="file"] {
+    display: block;
+    margin-top: 6px;
+    font-size: 13px;
+  }
+  .modal-box .or-divider {
+    font-size: 12px;
+    color: var(--ink-soft);
+    text-align: center;
+    margin: 4px 0 12px 0;
+  }
+  .modal-box textarea {
+    width: 100%;
+    min-height: 140px;
+    padding: 10px;
+    border: 1px solid var(--line);
+    border-radius: 7px;
+    font-family: inherit;
+    font-size: 13.5px;
+    resize: vertical;
+    margin-bottom: 6px;
+  }
+  .modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 14px;
+  }
 </style>
 </head>
 <body>
@@ -445,7 +509,9 @@ const state = {
   activeChartId: null,
   saveTimer: null,
   saveStatus: "",
-  dragStudentId: null
+  dragStudentId: null,
+  showImportModal: false,
+  importText: ""
 };
 
 const root = document.getElementById('app');
@@ -555,6 +621,115 @@ function removeStudent(id) {
   render();
 }
 
+/* ---- CSV / mass import ---- */
+
+function splitCSVLine(line) {
+  const fields = [];
+  let cur = '';
+  let inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (ch === '"') {
+      if (inQuotes && line[i + 1] === '"') { cur += '"'; i++; }
+      else inQuotes = !inQuotes;
+    } else if (ch === ',' && !inQuotes) {
+      fields.push(cur.trim());
+      cur = '';
+    } else {
+      cur += ch;
+    }
+  }
+  fields.push(cur.trim());
+  return fields.map(f => f.replace(/^"|"$/g, '').trim());
+}
+
+function parseNamesFromText(text) {
+  const lines = text.split(/\r?\n/).map(l => l.trim()).filter(l => l.length > 0);
+  if (lines.length === 0) return [];
+
+  let rows = lines.map(splitCSVLine);
+
+  // Detect an optional header row and which columns hold names.
+  const headerWords = ['name', 'student', 'student name', 'full name', 'first name', 'first', 'last name', 'last'];
+  const firstRowLower = rows[0].map(f => f.toLowerCase());
+  const looksLikeHeader = rows[0].length > 1 && firstRowLower.some(f => headerWords.includes(f));
+
+  let nameIdx = -1, firstIdx = -1, lastIdx = -1;
+  if (looksLikeHeader) {
+    firstRowLower.forEach((f, i) => {
+      if (f === 'first name' || f === 'first') firstIdx = i;
+      else if (f === 'last name' || f === 'last') lastIdx = i;
+      else if (nameIdx === -1 && (f === 'name' || f === 'student' || f === 'student name' || f === 'full name')) nameIdx = i;
+    });
+    rows = rows.slice(1);
+  }
+
+  const names = [];
+  rows.forEach(fields => {
+    if (fields.every(f => !f)) return;
+    let name;
+    if (firstIdx !== -1 && lastIdx !== -1) {
+      name = `${fields[firstIdx] || ''} ${fields[lastIdx] || ''}`.trim();
+    } else if (nameIdx !== -1) {
+      name = fields[nameIdx];
+    } else if (fields.length >= 2) {
+      // No header, two+ columns: assume "Last, First" (common export format)
+      name = `${fields[1]} ${fields[0]}`.trim();
+    } else {
+      name = fields[0];
+    }
+    name = (name || '').replace(/\s+/g, ' ').trim();
+    if (name) names.push(name);
+  });
+
+  return names;
+}
+
+function openImportModal() {
+  state.showImportModal = true;
+  state.importText = '';
+  render();
+}
+
+function closeImportModal() {
+  state.showImportModal = false;
+  state.importText = '';
+  render();
+}
+
+function handleFileSelect(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    state.importText = ev.target.result;
+    const textarea = document.getElementById('import-textarea');
+    if (textarea) textarea.value = state.importText;
+  };
+  reader.readAsText(file);
+}
+
+function doImport() {
+  const names = parseNamesFromText(state.importText);
+  if (names.length === 0) {
+    alert("No names found. Paste a list of names or choose a CSV file first.");
+    return;
+  }
+  const existingLower = new Set(state.students.map(s => s.name.toLowerCase()));
+  let added = 0, skipped = 0;
+  names.forEach(name => {
+    if (existingLower.has(name.toLowerCase())) { skipped++; return; }
+    state.students.push({ id: uid(), name });
+    existingLower.add(name.toLowerCase());
+    added++;
+  });
+  state.showImportModal = false;
+  state.importText = '';
+  persist();
+  render();
+  alert(`Imported ${added} student${added === 1 ? '' : 's'}.` + (skipped ? ` Skipped ${skipped} duplicate${skipped === 1 ? '' : 's'}.` : ''));
+}
+
 function addChart() {
   const id = uid();
   state.charts[id] = { name: "New Chart", rows: 4, cols: 6, seats: {} };
@@ -640,6 +815,43 @@ function el(tag, attrs = {}, children = []) {
 }
 const text = (t) => document.createTextNode(t);
 
+function renderImportModal() {
+  const overlay = el('div', {
+    class: 'modal-overlay',
+    onclick: (e) => { if (e.target === overlay) closeImportModal(); }
+  });
+
+  const box = el('div', { class: 'modal-box' });
+  box.appendChild(el('h3', {}, [text('Import students')]));
+  box.appendChild(el('div', { class: 'hint' }, [
+    text('Upload a CSV file, or paste a list of names below — one per line. A header row (Name, or First Name / Last Name) is detected automatically if present.')
+  ]));
+
+  const fileRow = el('div', { class: 'file-row' }, [
+    text('CSV or text file:'),
+    el('input', { type: 'file', accept: '.csv,.txt', onchange: handleFileSelect })
+  ]);
+  box.appendChild(fileRow);
+  box.appendChild(el('div', { class: 'or-divider' }, [text('— or paste below —')]));
+
+  const textarea = el('textarea', {
+    id: 'import-textarea',
+    placeholder: 'Jane Smith\nJohn Doe\n...',
+    oninput: (e) => { state.importText = e.target.value; }
+  });
+  textarea.value = state.importText;
+  box.appendChild(textarea);
+
+  const actions = el('div', { class: 'modal-actions' }, [
+    el('button', { class: 'pill-btn secondary', onclick: closeImportModal }, [text('Cancel')]),
+    el('button', { class: 'pill-btn', onclick: doImport }, [text('Import')])
+  ]);
+  box.appendChild(actions);
+
+  overlay.appendChild(box);
+  return overlay;
+}
+
 function render() {
   root.innerHTML = '';
 
@@ -668,6 +880,10 @@ function render() {
   wrap.appendChild(layout);
 
   root.appendChild(wrap);
+
+  if (state.showImportModal) {
+    root.appendChild(renderImportModal());
+  }
 }
 
 function renderConfigGate() {
@@ -749,6 +965,11 @@ function renderSidebar() {
   addRow.appendChild(input);
   addRow.appendChild(addBtn);
   rosterSection.appendChild(addRow);
+
+  rosterSection.appendChild(el('button', {
+    class: 'pill-btn secondary', style: 'width:100%;justify-content:center;margin-bottom:14px',
+    onclick: openImportModal
+  }, [text('Import list or CSV')]));
 
   if (state.students.length === 0) {
     rosterSection.appendChild(el('div', { class: 'empty-note' }, [

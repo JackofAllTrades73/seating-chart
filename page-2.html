@@ -342,8 +342,17 @@
   .class-card{
     border:1px solid var(--paper-line); border-radius:8px; padding:12px 14px; margin-bottom:12px; background:#FCFAF3;
   }
-  .class-card-head{ display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; }
+  .class-card-head{ display:flex; align-items:center; gap:8px; margin-bottom:8px; }
   .class-card-head strong{ font-size:14.5px; }
+  .reorder-controls{ display:flex; gap:2px; flex-shrink:0; }
+  .reorder-controls button{ padding:5px 8px; line-height:1; }
+  .reorder-controls button:disabled{ opacity:0.3; cursor:default; }
+  .class-name-input{
+    flex:1; font-size:14.5px; font-weight:600; font-family:'IBM Plex Sans', sans-serif;
+    border:1px solid transparent; border-radius:6px; padding:5px 8px; background:transparent; color:var(--ink);
+    min-width:0;
+  }
+  .class-name-input:hover, .class-name-input:focus{ border-color:var(--rule); background:#fff; }
   .student-chip-list{ display:flex; flex-wrap:wrap; gap:6px; margin-bottom:8px; }
   .student-chip{
     background:#fff; border:1px solid var(--rule); border-radius:14px; padding:4px 10px 4px 12px; font-size:12.5px;
@@ -1054,10 +1063,14 @@ function exportCsv(){
 
 /* ======================= MANAGE VIEW ======================= */
 function renderManage(){
-  const classCards = CONFIG.classes.map(c=>`
+  const classCards = CONFIG.classes.map((c,idx)=>`
     <div class="class-card">
       <div class="class-card-head">
-        <strong>${escapeHtml(c.name)}</strong>
+        <div class="reorder-controls">
+          <button class="btn small secondary" title="Move up" ${idx===0?'disabled':''} onclick="moveClass('${c.id}',-1)">↑</button>
+          <button class="btn small secondary" title="Move down" ${idx===CONFIG.classes.length-1?'disabled':''} onclick="moveClass('${c.id}',1)">↓</button>
+        </div>
+        <input type="text" class="class-name-input" value="${escapeHtml(c.name)}" onchange="renameClass('${c.id}', this.value)" aria-label="Class name">
         <button class="btn small danger" onclick="deleteClass('${c.id}')">Delete Class</button>
       </div>
       <div class="student-chip-list">
@@ -1156,6 +1169,22 @@ async function addClass(){
   if(!name) return;
   CONFIG.classes.push({id:uid('cls'), name, students:[]});
   if(!currentClassId) currentClassId = CONFIG.classes[0].id;
+  render();
+  scheduleSave();
+}
+async function renameClass(id, value){
+  const cls = CONFIG.classes.find(c=>c.id===id);
+  const name = value.trim();
+  if(!name){ render(); return; } // revert to old name by re-rendering
+  cls.name = name;
+  scheduleSave();
+}
+async function moveClass(id, direction){
+  const idx = CONFIG.classes.findIndex(c=>c.id===id);
+  const newIdx = idx + direction;
+  if(idx<0 || newIdx<0 || newIdx>=CONFIG.classes.length) return;
+  const [cls] = CONFIG.classes.splice(idx,1);
+  CONFIG.classes.splice(newIdx,0,cls);
   render();
   scheduleSave();
 }

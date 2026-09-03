@@ -187,9 +187,10 @@
     border-bottom:1px solid var(--paper-line);
   }
   .date-control{ display:flex; align-items:center; gap:6px; }
-  .date-control button{
+  .date-control .date-arrow{
     background:none; border:1px solid var(--rule); color:var(--ledger);
     width:28px; height:28px; border-radius:6px; font-size:14px;
+    display:inline-flex; align-items:center; justify-content:center; padding:0; flex-shrink:0;
   }
   .date-control input[type=date]{
     border:1px solid var(--rule); border-radius:6px; padding:5px 8px;
@@ -206,8 +207,9 @@
     border-collapse:collapse;
     width:100%;
     min-width:640px;
-    background-image: repeating-linear-gradient(to bottom, transparent, transparent 43px, var(--paper-line) 43px, var(--paper-line) 44px);
   }
+  table.roster tbody tr{ border-bottom:1px solid var(--paper-line); }
+  table.roster tbody tr:last-child{ border-bottom:none; }
   table.roster th{
     text-align:center;
     font-size:10.5px;
@@ -226,7 +228,7 @@
     padding:0 8px;
     height:44px;
     text-align:center;
-    border-bottom:1px solid transparent;
+    vertical-align:middle;
   }
   table.roster td.name-cell{
     text-align:left;
@@ -256,6 +258,9 @@
   }
   .tally-undo:hover{ opacity:1; }
   .note-btn{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
     background:none; border:1px solid var(--rule); border-radius:6px;
     width:28px; height:28px; color:var(--ink-soft); font-size:13px; position:relative;
   }
@@ -811,9 +816,9 @@ function renderTrack(){
       <div class="track-toolbar">
         <div class="class-name-heading">${escapeHtml(cls.name)}</div>
         <div class="date-control">
-          <button onclick="shiftDate(-1)" title="Previous day">‹</button>
+          <button class="date-arrow" onclick="shiftDate(-1)" title="Previous day">‹</button>
           <input type="date" value="${currentDate}" onchange="setDate(this.value)">
-          <button onclick="shiftDate(1)" title="Next day">›</button>
+          <button class="date-arrow" onclick="shiftDate(1)" title="Next day">›</button>
           ${currentDate!==todayStr() ? `<button class="btn small secondary" onclick="setDate(todayStr())">Today</button>` : ''}
         </div>
       </div>

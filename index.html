@@ -959,18 +959,6 @@ function clearSeat(chartId, seatKey) {
   render();
 }
 
-function allSeatKeys(c) {
-  const keys = [];
-  for (let r = 0; r < c.rows; r++) {
-    for (let col = 0; col < c.cols; col++) {
-      for (let s = 0; s < c.capacity; s++) {
-        keys.push(`${r}-${col}-${s}`);
-      }
-    }
-  }
-  return keys;
-}
-
 function shuffleChart(chartId) {
   const c = state.charts[chartId];
   const placedIds = new Set(Object.values(c.seats));
@@ -988,7 +976,10 @@ function shuffleChart(chartId) {
   render();
 }
 
-// Randomly fills every empty seat with a student who isn't seated yet.
+// Randomly fills every empty seat, always placing the next student at
+// whichever table/desk currently has the fewest people — so with tables,
+// students end up spread evenly rather than filling one table before
+// moving to the next.
 function fillAllSeats(chartId) {
   const c = state.charts[chartId];
   const placedIds = new Set(Object.values(c.seats));
@@ -1001,13 +992,35 @@ function fillAllSeats(chartId) {
     const j = Math.floor(Math.random() * (i + 1));
     [unplaced[i], unplaced[j]] = [unplaced[j], unplaced[i]];
   }
-  const emptyKeys = allSeatKeys(c).filter(k => !c.seats[k]);
+
+  const units = [];
+  for (let r = 0; r < c.rows; r++) {
+    for (let col = 0; col < c.cols; col++) {
+      const emptySeats = [];
+      let occupied = 0;
+      for (let s = 0; s < c.capacity; s++) {
+        const key = `${r}-${col}-${s}`;
+        if (c.seats[key]) occupied++;
+        else emptySeats.push(key);
+      }
+      units.push({ emptySeats, occupied });
+    }
+  }
+
   let placed = 0;
-  for (const key of emptyKeys) {
-    if (placed >= unplaced.length) break;
-    c.seats[key] = unplaced[placed].id;
+  for (const student of unplaced) {
+    let best = null;
+    for (const u of units) {
+      if (u.emptySeats.length === 0) continue;
+      if (!best || u.occupied < best.occupied) best = u;
+    }
+    if (!best) break;
+    const key = best.emptySeats.shift();
+    c.seats[key] = student.id;
+    best.occupied++;
     placed++;
   }
+
   persist();
   render();
   if (placed < unplaced.length) {

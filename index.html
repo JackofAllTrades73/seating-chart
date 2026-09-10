@@ -475,6 +475,87 @@
     gap: 10px;
     margin-top: 14px;
   }
+
+  /* ---------- Layout toggle ---------- */
+  .toggle-group {
+    display: flex;
+    gap: 2px;
+    background: var(--paper-dim);
+    padding: 3px;
+    border-radius: 8px;
+  }
+  .toggle-btn {
+    border: none;
+    background: transparent;
+    color: var(--ink-soft);
+    font-size: 12.5px;
+    font-weight: 600;
+    padding: 6px 14px;
+    border-radius: 6px;
+  }
+  .toggle-btn.active {
+    background: var(--green);
+    color: var(--white);
+  }
+
+  /* ---------- Table layout ---------- */
+  .table-unit {
+    width: 100%;
+    height: 100%;
+    background: var(--paper-dim);
+    border: 1.5px solid var(--line);
+    border-radius: 16px;
+    padding: 8px 10px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+  }
+  .table-surface {
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    color: var(--ink-soft);
+    text-transform: uppercase;
+  }
+  .table-seats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 5px;
+    width: 100%;
+    flex: 1;
+  }
+  .table-seat {
+    background: var(--white);
+    border: 1.5px dashed var(--line);
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--ink-soft);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 3px;
+    position: relative;
+  }
+  .table-seat.filled {
+    border: 1.5px solid var(--green);
+    color: var(--ink);
+  }
+  .table-seat.drag-over {
+    border-color: var(--gold);
+    background: var(--gold-soft);
+  }
+  .table-seat .clear-seat {
+    position: absolute;
+    top: 2px;
+    right: 3px;
+    font-size: 9px;
+    color: var(--ink-soft);
+    opacity: 0;
+  }
+  .table-seat.filled:hover .clear-seat { opacity: 1; }
 </style>
 </head>
 <body>
@@ -515,6 +596,7 @@ const state = {
   saveTimer: null,
   saveStatus: "",
   dragStudentId: null,
+  dragFromSeatKey: null,
   dragChartId: null,
   chartOrder: [],
   showImportModal: false,
@@ -546,6 +628,20 @@ function loadData() {
         if (!c.students) {
           c.students = legacyStudents.map(s => ({ ...s }));
         }
+        // Migrate to layout-type-aware seat keys: old charts have no
+        // layoutType/capacity and seat keys shaped "row-col" (2 parts).
+        // New charts use "row-col-seatIndex" (3 parts) so a unit can hold
+        // more than one student (tables).
+        if (!c.layoutType) {
+          c.layoutType = 'desks';
+          c.capacity = 1;
+          const migrated = {};
+          Object.entries(c.seats || {}).forEach(([k, v]) => {
+            const parts = k.split('-');
+            migrated[parts.length === 2 ? `${parts[0]}-${parts[1]}-0` : k] = v;
+          });
+          c.seats = migrated;
+        }
       });
       // Explicit ordering for the class list (falls back to whatever order
       // existed if this is the first load since the reordering feature).
@@ -557,7 +653,7 @@ function loadData() {
     } else {
       // first time: seed with one empty chart
       const id = uid();
-      state.charts = { [id]: { name: "Period 1", rows: 4, cols: 6, seats: {}, students: [] } };
+      state.charts = { [id]: { name: "Period 1", rows: 4, cols: 6, layoutType: 'desks', capacity: 1, seats: {}, students: [] } };
       state.chartOrder = [id];
     }
     state.activeChartId = state.chartOrder.length ? state.chartOrder[0] : null;
@@ -765,7 +861,7 @@ function addChart() {
   const name = prompt("Name this class (e.g. \"Period 3\" or \"Homeroom\"):", "New Class");
   if (name === null) return;
   const id = uid();
-  state.charts[id] = { name: name.trim() || "New Class", rows: 4, cols: 6, seats: {}, students: [] };
+  state.charts[id] = { name: name.trim() || "New Class", rows: 4, cols: 6, layoutType: 'desks', capacity: 1, seats: {}, students: [] };
   state.chartOrder.push(id);
   state.activeChartId = id;
   persist();
@@ -812,13 +908,47 @@ function resizeChart(id, rows, cols) {
   render();
 }
 
-function placeStudent(chartId, seatKey, studentId) {
+function setLayoutType(chartId, type) {
   const c = state.charts[chartId];
-  // remove student from any other seat in this chart
+  if (c.layoutType === type) return;
+  if (Object.keys(c.seats).length > 0) {
+    if (!confirm("Switching layout clears the current seat placements (students stay on your roster). Continue?")) return;
+  }
+  c.layoutType = type;
+  c.capacity = type === 'tables' ? 6 : 1;
+  c.seats = {};
+  persist();
+  render();
+}
+
+function setCapacity(chartId, capacity) {
+  const c = state.charts[chartId];
+  capacity = Math.max(1, Math.min(6, capacity || 6));
+  if (capacity === c.capacity) return;
   Object.keys(c.seats).forEach(k => {
-    if (c.seats[k] === studentId) delete c.seats[k];
+    const seatIdx = Number(k.split('-')[2]);
+    if (seatIdx >= capacity) delete c.seats[k];
   });
-  c.seats[seatKey] = studentId;
+  c.capacity = capacity;
+  persist();
+  render();
+}
+
+// Places a student in a seat. If dragged directly from another seat and the
+// target is occupied, the two students swap; otherwise the student simply
+// moves (vacating wherever they were).
+function moveOrSwapStudent(chartId, studentId, targetKey, fromKey) {
+  const c = state.charts[chartId];
+  const occupant = c.seats[targetKey];
+  if (fromKey && fromKey !== targetKey && occupant && occupant !== studentId) {
+    c.seats[fromKey] = occupant;
+    c.seats[targetKey] = studentId;
+  } else {
+    Object.keys(c.seats).forEach(k => {
+      if (c.seats[k] === studentId) delete c.seats[k];
+    });
+    c.seats[targetKey] = studentId;
+  }
   persist();
   render();
 }
@@ -827,6 +957,18 @@ function clearSeat(chartId, seatKey) {
   delete state.charts[chartId].seats[seatKey];
   persist();
   render();
+}
+
+function allSeatKeys(c) {
+  const keys = [];
+  for (let r = 0; r < c.rows; r++) {
+    for (let col = 0; col < c.cols; col++) {
+      for (let s = 0; s < c.capacity; s++) {
+        keys.push(`${r}-${col}-${s}`);
+      }
+    }
+  }
+  return keys;
 }
 
 function shuffleChart(chartId) {
@@ -844,6 +986,33 @@ function shuffleChart(chartId) {
   c.seats = newSeats;
   persist();
   render();
+}
+
+// Randomly fills every empty seat with a student who isn't seated yet.
+function fillAllSeats(chartId) {
+  const c = state.charts[chartId];
+  const placedIds = new Set(Object.values(c.seats));
+  const unplaced = c.students.filter(s => !placedIds.has(s.id));
+  if (unplaced.length === 0) {
+    alert("Everyone on the roster already has a seat.");
+    return;
+  }
+  for (let i = unplaced.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [unplaced[i], unplaced[j]] = [unplaced[j], unplaced[i]];
+  }
+  const emptyKeys = allSeatKeys(c).filter(k => !c.seats[k]);
+  let placed = 0;
+  for (const key of emptyKeys) {
+    if (placed >= unplaced.length) break;
+    c.seats[key] = unplaced[placed].id;
+    placed++;
+  }
+  persist();
+  render();
+  if (placed < unplaced.length) {
+    alert(`Seated ${placed} student${placed === 1 ? '' : 's'}. There aren't enough empty seats for the remaining ${unplaced.length - placed} — add more rows/columns or tables.`);
+  }
 }
 
 /* =========================================================
@@ -1022,7 +1191,7 @@ function renderSidebar() {
   const activeChart = state.charts[state.activeChartId];
   const rosterSection = el('div', { class: 'section' });
   rosterSection.appendChild(el('h3', {}, [
-    text(activeChart ? `Roster — ${activeChart.name}` : 'Roster')
+    text(activeChart ? `Roster — ${activeChart.name} (${activeChart.students.length})` : 'Roster')
   ]));
 
   if (!activeChart) {
@@ -1061,7 +1230,7 @@ function renderSidebar() {
       const chip = el('div', {
         class: 'roster-chip' + (placedIds.has(s.id) ? ' placed' : ''),
         draggable: 'true',
-        ondragstart: (e) => { state.dragStudentId = s.id; e.dataTransfer.setData('text/plain', s.id); }
+        ondragstart: (e) => { state.dragStudentId = s.id; state.dragFromSeatKey = null; e.dataTransfer.setData('text/plain', s.id); }
       }, [
         text(s.name),
         el('span', { class: 'rm', onclick: () => removeStudent(s.id) }, [text('Remove')])
@@ -1096,15 +1265,27 @@ function renderMain() {
   });
   toolbar.appendChild(nameInput);
 
+  const layoutToggle = el('div', { class: 'toggle-group' }, [
+    el('button', {
+      class: 'toggle-btn' + (chart.layoutType === 'desks' ? ' active' : ''),
+      onclick: () => setLayoutType(chartId, 'desks')
+    }, [text('Desks')]),
+    el('button', {
+      class: 'toggle-btn' + (chart.layoutType === 'tables' ? ' active' : ''),
+      onclick: () => setLayoutType(chartId, 'tables')
+    }, [text('Tables')])
+  ]);
+  toolbar.appendChild(layoutToggle);
+
   const rowsCtrl = el('div', { class: 'dim-control' }, [
-    text('Rows'),
+    text(chart.layoutType === 'tables' ? 'Table rows' : 'Rows'),
     el('input', {
       type: 'number', value: chart.rows, min: '1', max: '12',
       onchange: (e) => resizeChart(chartId, parseInt(e.target.value) || 1, chart.cols)
     })
   ]);
   const colsCtrl = el('div', { class: 'dim-control' }, [
-    text('Cols'),
+    text(chart.layoutType === 'tables' ? 'Table cols' : 'Cols'),
     el('input', {
       type: 'number', value: chart.cols, min: '1', max: '12',
       onchange: (e) => resizeChart(chartId, chart.rows, parseInt(e.target.value) || 1)
@@ -1112,6 +1293,20 @@ function renderMain() {
   ]);
   toolbar.appendChild(rowsCtrl);
   toolbar.appendChild(colsCtrl);
+
+  if (chart.layoutType === 'tables') {
+    toolbar.appendChild(el('div', { class: 'dim-control' }, [
+      text('Seats/table'),
+      el('input', {
+        type: 'number', value: chart.capacity, min: '1', max: '6',
+        onchange: (e) => setCapacity(chartId, parseInt(e.target.value) || 6)
+      })
+    ]));
+  }
+
+  toolbar.appendChild(el('button', {
+    class: 'pill-btn secondary', onclick: () => fillAllSeats(chartId)
+  }, [text('Seat everyone')]));
 
   toolbar.appendChild(el('button', {
     class: 'pill-btn secondary', onclick: () => shuffleChart(chartId)
@@ -1122,6 +1317,11 @@ function renderMain() {
   }, [text('Print')]));
 
   toolbar.appendChild(el('div', { class: 'spacer' }));
+
+  const seatedCount = new Set(Object.values(chart.seats)).size;
+  toolbar.appendChild(el('div', { class: 'save-status' }, [
+    text(`${chart.students.length} student${chart.students.length === 1 ? '' : 's'} · ${seatedCount} seated`)
+  ]));
   toolbar.appendChild(el('div', { class: 'save-status' }, [text(state.saveStatus)]));
   main.appendChild(toolbar);
 
@@ -1130,9 +1330,13 @@ function renderMain() {
   const frame = el('div', { class: 'board-frame' });
   frame.appendChild(el('div', { class: 'front-label' }, [text('Front of room')]));
 
+  const isTables = chart.layoutType === 'tables';
+  const unitW = isTables ? 210 : 128;
+  const unitH = isTables ? 150 : 84;
+  const gridGap = isTables ? 22 : 14;
   const grid = el('div', {
     class: 'grid',
-    style: `grid-template-columns: repeat(${chart.cols}, 128px); grid-template-rows: repeat(${chart.rows}, 84px);`
+    style: `grid-template-columns: repeat(${chart.cols}, ${unitW}px); grid-template-rows: repeat(${chart.rows}, ${unitH}px); gap: ${gridGap}px;`
   });
 
   const studentsById = {};
@@ -1140,28 +1344,11 @@ function renderMain() {
 
   for (let r = 0; r < chart.rows; r++) {
     for (let c = 0; c < chart.cols; c++) {
-      const key = `${r}-${c}`;
-      const studentId = chart.seats[key];
-      const student = studentId ? studentsById[studentId] : null;
-      const desk = el('div', {
-        class: 'desk ' + (student ? 'filled' : 'empty'),
-        ondragover: (e) => { e.preventDefault(); desk.classList.add('drag-over'); },
-        ondragleave: () => { desk.classList.remove('drag-over'); },
-        ondrop: (e) => {
-          e.preventDefault();
-          desk.classList.remove('drag-over');
-          const sid = e.dataTransfer.getData('text/plain');
-          if (sid) placeStudent(chartId, key, sid);
-        }
-      }, [
-        student ? text(student.name) : text('Empty desk')
-      ]);
-      if (student) {
-        desk.appendChild(el('span', {
-          class: 'clear-seat', onclick: () => clearSeat(chartId, key)
-        }, [text('✕')]));
-      }
-      grid.appendChild(desk);
+      grid.appendChild(
+        isTables
+          ? renderTableUnit(chart, chartId, r, c, studentsById)
+          : renderDeskUnit(chart, chartId, r, c, studentsById)
+      );
     }
   }
 
@@ -1170,6 +1357,87 @@ function renderMain() {
   main.appendChild(canvasWrap);
 
   return main;
+}
+
+function renderDeskUnit(chart, chartId, r, c, studentsById) {
+  const key = `${r}-${c}-0`;
+  const studentId = chart.seats[key];
+  const student = studentId ? studentsById[studentId] : null;
+
+  const attrs = {
+    class: 'desk ' + (student ? 'filled' : 'empty'),
+    ondragover: (e) => { e.preventDefault(); desk.classList.add('drag-over'); },
+    ondragleave: () => { desk.classList.remove('drag-over'); },
+    ondrop: (e) => {
+      e.preventDefault();
+      desk.classList.remove('drag-over');
+      const sid = e.dataTransfer.getData('text/plain');
+      if (sid) moveOrSwapStudent(chartId, sid, key, state.dragFromSeatKey);
+      state.dragFromSeatKey = null;
+    }
+  };
+  if (student) {
+    attrs.draggable = 'true';
+    attrs.ondragstart = (e) => {
+      state.dragStudentId = student.id;
+      state.dragFromSeatKey = key;
+      e.dataTransfer.setData('text/plain', student.id);
+    };
+  }
+
+  const desk = el('div', attrs, [
+    student ? text(student.name) : text('Empty desk')
+  ]);
+  if (student) {
+    desk.appendChild(el('span', {
+      class: 'clear-seat', onclick: (e) => { e.stopPropagation(); clearSeat(chartId, key); }
+    }, [text('✕')]));
+  }
+  return desk;
+}
+
+function renderTableUnit(chart, chartId, r, c, studentsById) {
+  const unit = el('div', { class: 'table-unit' });
+  unit.appendChild(el('div', { class: 'table-surface' }, [text(`Table ${r * chart.cols + c + 1}`)]));
+  const seatsWrap = el('div', { class: 'table-seats' });
+
+  for (let s = 0; s < chart.capacity; s++) {
+    const key = `${r}-${c}-${s}`;
+    const studentId = chart.seats[key];
+    const student = studentId ? studentsById[studentId] : null;
+
+    const attrs = {
+      class: 'table-seat ' + (student ? 'filled' : 'empty'),
+      ondragover: (e) => { e.preventDefault(); seat.classList.add('drag-over'); },
+      ondragleave: () => { seat.classList.remove('drag-over'); },
+      ondrop: (e) => {
+        e.preventDefault();
+        seat.classList.remove('drag-over');
+        const sid = e.dataTransfer.getData('text/plain');
+        if (sid) moveOrSwapStudent(chartId, sid, key, state.dragFromSeatKey);
+        state.dragFromSeatKey = null;
+      }
+    };
+    if (student) {
+      attrs.draggable = 'true';
+      attrs.ondragstart = (e) => {
+        state.dragStudentId = student.id;
+        state.dragFromSeatKey = key;
+        e.dataTransfer.setData('text/plain', student.id);
+      };
+    }
+
+    const seat = el('div', attrs, [student ? text(student.name) : text('+')]);
+    if (student) {
+      seat.appendChild(el('span', {
+        class: 'clear-seat', onclick: (e) => { e.stopPropagation(); clearSeat(chartId, key); }
+      }, [text('✕')]));
+    }
+    seatsWrap.appendChild(seat);
+  }
+
+  unit.appendChild(seatsWrap);
+  return unit;
 }
 
 render();

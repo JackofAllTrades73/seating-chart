@@ -959,6 +959,18 @@ function clearSeat(chartId, seatKey) {
   render();
 }
 
+function clearAllSeats(chartId) {
+  const c = state.charts[chartId];
+  if (Object.keys(c.seats).length === 0) {
+    alert("No one is seated yet.");
+    return;
+  }
+  if (!confirm("Remove everyone from their seats? Students stay on the roster — just unseated.")) return;
+  c.seats = {};
+  persist();
+  render();
+}
+
 function shuffleChart(chartId) {
   const c = state.charts[chartId];
   const placedIds = new Set(Object.values(c.seats));
@@ -1324,6 +1336,10 @@ function renderMain() {
   toolbar.appendChild(el('button', {
     class: 'pill-btn secondary', onclick: () => shuffleChart(chartId)
   }, [text('Shuffle seated')]));
+
+  toolbar.appendChild(el('button', {
+    class: 'pill-btn secondary', onclick: () => clearAllSeats(chartId)
+  }, [text('Clear seats')]));
 
   toolbar.appendChild(el('button', {
     class: 'pill-btn secondary', onclick: () => window.print()

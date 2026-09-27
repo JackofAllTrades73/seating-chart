@@ -345,6 +345,19 @@
     display: inline-block;
   }
 
+  .board-frame.rotated {
+    transform: rotate(180deg);
+  }
+
+  /* Counter-rotate each piece of content so names/labels stay readable
+     even though the overall layout (desk order, front label position) is
+     flipped 180 degrees. */
+  .board-frame.rotated .front-label,
+  .board-frame.rotated .desk,
+  .board-frame.rotated .table-unit {
+    transform: rotate(180deg);
+  }
+
   .front-label {
     text-align: center;
     font-size: 12px;
@@ -509,6 +522,12 @@
   .toggle-btn.active {
     background: var(--green);
     color: var(--white);
+  }
+
+  .pill-btn.secondary.is-active {
+    background: var(--green);
+    color: var(--white);
+    border-color: var(--green);
   }
 
   /* ---------- Table layout ---------- */
@@ -949,6 +968,13 @@ function setCapacity(chartId, capacity) {
   render();
 }
 
+function toggleRotate(chartId) {
+  const c = state.charts[chartId];
+  c.rotated = !c.rotated;
+  persist();
+  render();
+}
+
 // Places a student in a seat. If dragged directly from another seat and the
 // target is occupied, the two students swap; otherwise the student simply
 // moves (vacating wherever they were).
@@ -1359,6 +1385,11 @@ function renderMain() {
   }, [text('Clear seats')]));
 
   toolbar.appendChild(el('button', {
+    class: 'pill-btn secondary' + (chart.rotated ? ' is-active' : ''),
+    onclick: () => toggleRotate(chartId)
+  }, [text('Rotate 180°')]));
+
+  toolbar.appendChild(el('button', {
     class: 'pill-btn secondary', onclick: () => window.print()
   }, [text('Print')]));
 
@@ -1373,7 +1404,7 @@ function renderMain() {
 
   // Canvas
   const canvasWrap = el('div', { class: 'canvas-wrap' });
-  const frame = el('div', { class: 'board-frame' });
+  const frame = el('div', { class: 'board-frame' + (chart.rotated ? ' rotated' : '') });
   frame.appendChild(el('div', { class: 'front-label' }, [text('Front of room')]));
 
   const isTables = chart.layoutType === 'tables';

@@ -206,7 +206,12 @@
   }
 
   /* ---------- Roster ledger table ---------- */
-  .roster-scroll{ overflow-x:auto; border-radius:8px; }
+  .roster-scroll{
+    overflow-x:auto;
+    overflow-y:auto;
+    max-height:65vh;
+    border-radius:8px;
+  }
   table.roster{
     border-collapse:collapse;
     width:100%;

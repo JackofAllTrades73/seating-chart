@@ -90,7 +90,11 @@ async function loadRoster(){
     store.set('hp_roster', roster);
     $('status').textContent = `Roster loaded (${j.students.length} students)`;
   } catch(e) {
-    $('status').textContent = Object.keys(roster).length ? 'Offline — using saved roster' : 'Could not load roster (check Setup)';
+    const why = e.message === 'bad key' ? 'wrong passcode'
+      : e instanceof TypeError ? 'cannot reach the script (check the URL ends in /exec and access is set to Anyone)'
+      : e instanceof SyntaxError ? 'script returned an error page (redeploy as a new version and check the Roster tab)'
+      : e.message;
+    $('status').textContent = (Object.keys(roster).length ? 'Using saved roster. ' : 'Could not load roster. ') + 'Reason: ' + why;
   }
   render();
 }

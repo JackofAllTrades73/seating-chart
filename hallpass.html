@@ -22,6 +22,8 @@ button{cursor:pointer}button.primary{background:var(--accent);color:#fff;border-
 .row{display:flex;justify-content:space-between;align-items:center;background:var(--card);border:1px solid var(--border);border-radius:8px;padding:8px 12px;margin-bottom:6px}
 .late{color:var(--bad);font-weight:700}
 #status{font-size:.85rem;color:#52606d}
+.tbl{overflow-x:auto}
+@media (pointer:coarse){button,select{min-height:44px}}
 dialog{border:1px solid var(--border);border-radius:12px;max-width:420px;width:90%}
 dialog input{width:100%;margin-bottom:8px}
 table{width:100%;border-collapse:collapse;background:var(--card)}td,th{border-bottom:1px solid var(--border);padding:6px 8px;text-align:left;font-size:.9rem}
@@ -30,7 +32,11 @@ table{width:100%;border-collapse:collapse;background:var(--card)}td,th{border-bo
 <body>
 <h1>Hall Pass Tracker</h1>
 <div class="bar">
-  <input id="period" placeholder="Class period" size="10">
+  <select id="period">
+    <option value="">Class period</option>
+    <option>0</option><option>1</option><option>2</option><option>3</option><option>4</option>
+    <option>5</option><option>6</option><option>7</option><option>8</option><option>9</option>
+  </select>
   <select id="dest">
     <option>Restroom</option><option>Nurse</option><option>Office</option>
     <option>Locker</option><option>Water</option><option>Other</option>
@@ -50,7 +56,7 @@ table{width:100%;border-collapse:collapse;background:var(--card)}td,th{border-bo
 <div id="outList"></div>
 
 <h2>Today's trips</h2>
-<table><thead><tr><th>Student</th><th>Where</th><th>Out</th><th>In</th><th>Min</th></tr></thead><tbody id="today"></tbody></table>
+<div class="tbl"><table><thead><tr><th>Student</th><th>Where</th><th>Out</th><th>In</th><th>Min</th></tr></thead><tbody id="today"></tbody></table></div>
 
 <dialog id="setupDlg">
   <p>Apps Script web app URL:</p>
@@ -78,7 +84,7 @@ let queue  = store.get('hp_queue', []);
 let today  = store.get('hp_today', {date:'', rows:[]});
 if (today.date !== new Date().toDateString()) today = {date:new Date().toDateString(), rows:[]};
 $('period').value = store.get('hp_period','');
-$('period').oninput = e => store.set('hp_period', e.target.value);
+$('period').onchange = e => store.set('hp_period', e.target.value);
 
 const nameOf = s => `${s.first||''} ${s.last||''}`.trim() || s.id;
 

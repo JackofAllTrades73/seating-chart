@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hall Pass Tracker</title>
+<style>
+:root{--bg:#f5f6f8;--card:#fff;--text:#1f2933;--accent:#2563eb;--bad:#dc2626;--ok:#16a34a;--border:#d8dde3}
+*{box-sizing:border-box}
+body{font-family:system-ui,sans-serif;background:var(--bg);color:var(--text);padding:16px;max-width:900px;margin:auto}
+h1{margin:0 0 12px;font-size:1.5rem}h2{font-size:1.1rem;margin:18px 0 8px}
+.bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px}
+select,input,button{font:inherit;padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:var(--card);color:var(--text)}
+button{cursor:pointer}button.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+#idIn{font-size:1.4rem;flex:1;min-width:180px}
+#msg{padding:12px;border-radius:8px;background:var(--card);border:1px solid var(--border);min-height:48px}
+#msg.ok{border-color:var(--ok)}#msg.bad{border-color:var(--bad);color:var(--bad)}#msg.warn{border-color:#d97706}
+.row{display:flex;justify-content:space-between;align-items:center;background:var(--card);border:1px solid var(--border);border-radius:8px;padding:8px 12px;margin-bottom:6px}
+.late{color:var(--bad);font-weight:700}
+#status{font-size:.85rem;color:#52606d}
+dialog{border:1px solid var(--border);border-radius:12px;max-width:420px;width:90%}
+dialog input{width:100%;margin-bottom:8px}
+table{width:100%;border-collapse:collapse;background:var(--card)}td,th{border-bottom:1px solid var(--border);padding:6px 8px;text-align:left;font-size:.9rem}
+</style>
+</head>
+<body>
+<h1>Hall Pass Tracker</h1>
+<div class="bar">
+  <input id="period" placeholder="Class period" size="10">
+  <select id="dest">
+    <option>Restroom</option><option>Nurse</option><option>Office</option>
+    <option>Locker</option><option>Water</option><option>Other</option>
+  </select>
+  <button id="refresh">Refresh roster</button>
+  <button id="setup">Setup</button>
+  <span id="status"></span>
+</div>
+
+<div class="bar">
+  <input id="idIn" placeholder="Scan or type student ID, then press Enter" autocomplete="off" inputmode="numeric">
+  <button class="primary" id="go">Go</button>
+</div>
+<div id="msg">Enter a student ID. First scan signs out; second scan signs back in.</div>
+
+<h2>Currently out</h2>
+<div id="outList"></div>
+
+<h2>Today's trips</h2>
+<table><thead><tr><th>Student</th><th>Where</th><th>Out</th><th>In</th><th>Min</th></tr></thead><tbody id="today"></tbody></table>
+
+<dialog id="setupDlg">
+  <p>Apps Script web app URL:</p>
+  <input id="urlIn" placeholder="https://script.google.com/macros/s/.../exec">
+  <p>Passcode (same as KEY in the script):</p>
+  <input id="keyIn" type="password">
+  <p>Warn if out longer than (minutes): <input id="limitIn" type="number" min="1" style="width:80px"></p>
+  <div class="bar"><button class="primary" id="saveSetup">Save</button><button onclick="setupDlg.close()">Cancel</button></div>
+</dialog>
+
+<script>
+const $ = id => document.getElementById(id);
+const store = {
+  get:(k,d)=>{try{const v=localStorage.getItem(k);return v?JSON.parse(v):d}catch(e){return d}},
+  set:(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}
+};
+const esc = s => String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const fmt = t => new Date(t).toLocaleTimeString([], {hour:'numeric',minute:'2-digit'});
+const mins = ms => Math.round(ms/6000)/10;
+
+let cfg    = store.get('hp_cfg', {url:'', key:'', limit:10});
+let roster = store.get('hp_roster', {});          // id -> student object (from the sheet)
+let out    = store.get('hp_out', {});             // id -> {name, dest, start}
+let queue  = store.get('hp_queue', []);
+let today  = store.get('hp_today', {date:'', rows:[]});
+if (today.date !== new Date().toDateString()) today = {date:new Date().toDateString(), rows:[]};
+$('period').value = store.get('hp_period','');
+$('period').oninput = e => store.set('hp_period', e.target.value);
+
+const nameOf = s => `${s.first||''} ${s.last||''}`.trim() || s.id;
+
+function say(html, cls){ $('msg').className = cls||''; $('msg').innerHTML = html; }
+
+async function loadRoster(){
+  if (!cfg.url) { render(); return; }
+  try {
+    const r = await fetch(`${cfg.url}?key=${encodeURIComponent(cfg.key)}`);
+    const j = await r.json();
+    if (!j.ok) throw new Error(j.error);
+    roster = {}; j.students.forEach(s => roster[s.id] = s);
+    store.set('hp_roster', roster);
+    $('status').textContent = `Roster loaded (${j.students.length} students)`;
+  } catch(e) {
+    $('status').textContent = Object.keys(roster).length ? 'Offline — using saved roster' : 'Could not load roster (check Setup)';
+  }
+  render();
+}
+
+function submitId(){
+  const id = $('idIn').value.trim();
+  $('idIn').value = ''; $('idIn').focus();
+  if (!id) return;
+  if (!Object.keys(roster).length) return say('Roster not loaded. Open Setup and check the URL and passcode.', 'bad');
+  const s = roster[id];
+  if (!s) return say(`ID <b>${esc(id)}</b> was not found. Check the number and try again.`, 'bad');
+
+  const info = [s.period && `Period ${esc(s.period)}`, s.grade && `Grade ${esc(s.grade)}`].filter(Boolean).join(' · ');
+  const cp = $('period').value.trim();
+  const mismatch = cp && s.period && cp.toLowerCase() !== s.period.toLowerCase();
+  const warn = mismatch ? `<br><b>Note:</b> roster lists this student in period ${esc(s.period)}, not ${esc(cp)}.` : '';
+
+  if (out[id]) {
+    const o = out[id], end = Date.now(), m = mins(end - o.start);
+    const row = {id, date:new Date().toLocaleDateString(), classPeriod:cp, destination:o.dest,
+                 out:fmt(o.start), in:fmt(end), minutes:m};
+    delete out[id];
+    today.rows.push({...row, name:nameOf(s)});
+    queue.push(row);
+    store.set('hp_today', today); store.set('hp_queue', queue); store.set('hp_out', out);
+    say(`<b>${esc(nameOf(s))}</b> returned after ${m} min.<br>${info}${warn}`, mismatch?'warn':'ok');
+    flush();
+  } else {
+    out[id] = {name:nameOf(s), dest:$('dest').value, start:Date.now()};
+    store.set('hp_out', out);
+    say(`<b>${esc(nameOf(s))}</b> signed out to ${esc($('dest').value)} at ${fmt(out[id].start)}.<br>${info}${warn}`, mismatch?'warn':'ok');
+  }
+  render();
+}
+
+async function flush(){
+  if (!cfg.url) return;
+  while (queue.length) {
+    try {
+      await fetch(cfg.url, {method:'POST', mode:'no-cors', headers:{'Content-Type':'text/plain'},
+                            body:JSON.stringify({...queue[0], key:cfg.key})});
+      queue.shift(); store.set('hp_queue', queue);
+    } catch(e) { break; }
+  }
+  render();
+}
+
+function render(){
+  const ids = Object.keys(out);
+  $('outList').innerHTML = ids.length ? ids.map(id=>{
+    const o = out[id], m = mins(Date.now()-o.start);
+    return `<div class="row"><span>${esc(o.name)} — ${esc(o.dest)} (since ${fmt(o.start)})</span>
+      <span><span class="${m>cfg.limit?'late':''}">${m} min</span> <button onclick="manualReturn('${esc(id)}')">Return</button></span></div>`;
+  }).join('') : '<em>Nobody is out.</em>';
+  $('today').innerHTML = today.rows.slice().reverse().map(r =>
+    `<tr><td>${esc(r.name)}</td><td>${esc(r.destination)}</td><td>${r.out}</td><td>${r.in}</td><td>${r.minutes}</td></tr>`).join('');
+  if (queue.length) $('status').textContent = `${queue.length} unsent — will retry`;
+}
+window.manualReturn = id => { $('idIn').value = id; submitId(); };
+
+$('idIn').addEventListener('keydown', e => { if (e.key === 'Enter') submitId(); });
+$('go').onclick = submitId;
+$('refresh').onclick = loadRoster;
+$('setup').onclick = () => { $('urlIn').value = cfg.url; $('keyIn').value = cfg.key; $('limitIn').value = cfg.limit; setupDlg.showModal(); };
+$('saveSetup').onclick = () => {
+  cfg = {url:$('urlIn').value.trim(), key:$('keyIn').value, limit:+$('limitIn').value || 10};
+  store.set('hp_cfg', cfg); setupDlg.close(); loadRoster(); flush();
+};
+
+setInterval(render, 15000);
+window.addEventListener('online', () => { flush(); loadRoster(); });
+render(); loadRoster(); flush(); $('idIn').focus();
+</script>
+</body>
+</html>

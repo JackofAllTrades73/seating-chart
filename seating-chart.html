@@ -585,9 +585,9 @@
     align-items: center;
     justify-content: center;
     text-align: center;
-    padding: 6px;
+    padding: 4px;
     position: relative;
-    overflow-wrap: anywhere;
+    overflow-wrap: break-word;
   }
   .table-seat.filled {
     border: 1.5px solid var(--green);
@@ -1400,6 +1400,8 @@ function renderSidebar() {
     rosterSection.appendChild(rlist);
   }
   side.appendChild(rosterSection);
+
+  side.appendChild(el('div', { style: 'margin-top:24px;font-size:11px;color:var(--ink-soft);opacity:0.7' }, [text('Version 2026-10-14 · tables 330px')]));
 
   return side;
 }
